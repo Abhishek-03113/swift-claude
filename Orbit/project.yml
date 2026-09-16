@@ -2,7 +2,7 @@ name: Orbit
 options:
   bundleIdPrefix: com.orbit.app
   deploymentTarget:
-    macOS: "13.0"
+    macOS: "14.0"
   createIntermediateGroups: true
 
 settings:
@@ -34,7 +34,7 @@ targets:
       path: OrbitApp/Info.plist
       properties:
         CFBundleDisplayName: Orbit
-        LSMinimumSystemVersion: "13.0"
+        LSMinimumSystemVersion: "14.0"
         NSHumanReadableCopyright: ""
     entitlements:
       path: OrbitApp/OrbitApp.entitlements
@@ -49,6 +49,10 @@ targets:
     sources:
       - path: OrbitWidget
       - path: Shared
+    dependencies:
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+      - sdk: AppIntents.framework
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.orbit.app.OrbitWidget
@@ -70,13 +74,34 @@ targets:
         com.apple.security.application-groups:
           - group.com.orbit.app
 
+  OrbitTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: OrbitTests
+      - path: Shared
+      # Only the pure-logic dial files — not the SwiftUI view files, which
+      # pull in OrbitWidget/Intents (AppIntents) that the test target has
+      # no reason to link.
+      - path: OrbitWidget/Dial/DialMetrics.swift
+      - path: OrbitWidget/Dial/DialPresentation.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.orbit.app.OrbitTests
+        GENERATE_INFOPLIST_FILE: true
+
 schemes:
   Orbit:
     build:
       targets:
         OrbitApp: all
         OrbitWidgetExtension: all
+        OrbitTests: all
     run:
       config: Debug
+    test:
+      config: Debug
+      targets:
+        - OrbitTests
     archive:
       config: Release
