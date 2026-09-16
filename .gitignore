@@ -1,7 +1,13 @@
 .DS_Store
+
+# Swift package
+.build/
+.swiftpm/
+Package.resolved
+
+# Xcode
 build/
 DerivedData/
 *.xcodeproj
 *.xcworkspace
 xcuserdata/
-.swiftpm/
