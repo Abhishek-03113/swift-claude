@@ -1,0 +1,107 @@
+name: Orbit
+options:
+  bundleIdPrefix: com.orbit.app
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: "" # TODO: set your Apple Developer Team ID
+
+targets:
+  OrbitApp:
+    type: application
+    platform: macOS
+    sources:
+      - path: OrbitApp
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.orbit.app
+        PRODUCT_NAME: Orbit
+        INFOPLIST_FILE: OrbitApp/Info.plist
+        CODE_SIGN_ENTITLEMENTS: OrbitApp/OrbitApp.entitlements
+        ENABLE_HARDENED_RUNTIME: true
+        COMBINE_HIDPI_IMAGES: true
+    dependencies:
+      - target: OrbitWidgetExtension
+        embed: true
+    info:
+      path: OrbitApp/Info.plist
+      properties:
+        CFBundleDisplayName: Orbit
+        LSMinimumSystemVersion: "14.0"
+        NSHumanReadableCopyright: ""
+    entitlements:
+      path: OrbitApp/OrbitApp.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.application-groups:
+          - group.com.orbit.app
+
+  OrbitWidgetExtension:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: OrbitWidget
+      - path: Shared
+    dependencies:
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+      - sdk: AppIntents.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.orbit.app.OrbitWidget
+        PRODUCT_NAME: OrbitWidget
+        INFOPLIST_FILE: OrbitWidget/Info.plist
+        CODE_SIGN_ENTITLEMENTS: OrbitWidget/OrbitWidget.entitlements
+        ENABLE_HARDENED_RUNTIME: true
+        SKIP_INSTALL: true
+    info:
+      path: OrbitWidget/Info.plist
+      properties:
+        CFBundleDisplayName: OrbitWidget
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: OrbitWidget/OrbitWidget.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.application-groups:
+          - group.com.orbit.app
+
+  OrbitTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: OrbitTests
+      - path: Shared
+      # Only the pure-logic dial files — not the SwiftUI view files, which
+      # pull in OrbitWidget/Intents (AppIntents) that the test target has
+      # no reason to link.
+      - path: OrbitWidget/Dial/DialMetrics.swift
+      - path: OrbitWidget/Dial/DialPresentation.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.orbit.app.OrbitTests
+        GENERATE_INFOPLIST_FILE: true
+
+schemes:
+  Orbit:
+    build:
+      targets:
+        OrbitApp: all
+        OrbitWidgetExtension: all
+        OrbitTests: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - OrbitTests
+    archive:
+      config: Release
