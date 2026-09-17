@@ -58,6 +58,7 @@ public enum DialPresentationBuilder {
             selected: selected,
             provider: snapshot.provider,
             focusColor: sessionIsFocused ? sessionColor : weeklyColor,
+            focusRemainingPercent: Int(((1 - focus.progress) * 100).rounded()),
             focusRemaining: focus.remaining,
             focusResetDate: focus.resetDate,
             focusPeriodLabel: sessionIsFocused ? "SESSION" : "WEEKLY",

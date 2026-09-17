@@ -87,11 +87,18 @@ struct UsageDialContainer: View {
 
     /// The 12 o'clock origin marker the arcs grow away from.
     private func startMarker(diameter: CGFloat, color: Color) -> some View {
-        Triangle()
-            .fill(color.opacity(0.9))
-            .frame(width: diameter * 0.03, height: diameter * 0.02)
-            .shadow(color: color.opacity(0.7), radius: diameter * 0.01)
-            .offset(y: -diameter / 2 - diameter * 0.01)
+        let width: CGFloat = diameter * 0.03
+        let height: CGFloat = diameter * 0.02
+        let shadowRadius: CGFloat = diameter * 0.01
+        let verticalOffset: CGFloat = -diameter / 2 - diameter * 0.01
+        let fillColor: Color = color.opacity(0.9)
+        let shadowColor: Color = color.opacity(0.7)
+
+        return Triangle()
+            .fill(fillColor)
+            .frame(width: width, height: height)
+            .shadow(color: shadowColor, radius: shadowRadius)
+            .offset(y: verticalOffset)
             .allowsHitTesting(false)
     }
 

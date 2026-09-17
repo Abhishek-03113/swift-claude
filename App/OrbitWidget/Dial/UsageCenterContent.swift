@@ -12,18 +12,19 @@ struct UsageCenterContent: View {
 
     var body: some View {
         VStack(spacing: diameter * 0.01) {
-            RemainingValueText(
-                remaining: presentation.focusRemaining,
-                resetDate: presentation.focusResetDate,
-                size: diameter * 0.19
-            )
-            .foregroundStyle(.white)
+            RemainingPercentText(percent: presentation.focusRemainingPercent, size: diameter * 0.24)
+                .foregroundStyle(.white)
 
             Text(presentation.focusPeriodLabel)
                 .font(UsageTypography.periodLabel(size: max(diameter * 0.05, 8)))
                 .tracking(UsageTypography.periodLabelTracking)
                 .foregroundStyle(Color(presentation.focusColor))
                 .padding(.top, diameter * 0.02)
+
+            Text("\(UsageFormatting.remainingText(presentation.focusRemaining)) left")
+                .font(UsageTypography.metadata(size: max(diameter * 0.06, 8)))
+                .foregroundStyle(.white.opacity(UsageOpacity.secondary))
+                .padding(.top, 1)
 
             if showsResetLine {
                 // Staleness displaces the reset line: knowing the number is
@@ -41,26 +42,19 @@ struct UsageCenterContent: View {
     }
 }
 
-/// Renders the remaining-time value.
-///
-/// Uses `Text(timerInterval:)` — the system-managed live countdown — so the
-/// value ticks without the widget rebuilding on a per-second timer. Falls
-/// back to a static string once the window has reset or has nothing left to
-/// count down.
-private struct RemainingValueText: View {
-    let remaining: Duration
-    let resetDate: Date
+/// Renders the dominant remaining-quota value as "68%", with the percent
+/// sign set smaller and baseline-aligned per the design's typography.
+private struct RemainingPercentText: View {
+    let percent: Int
     let size: CGFloat
 
     var body: some View {
-        Group {
-            if resetDate > .now, remaining.secondsDouble > 0 {
-                Text(timerInterval: Date.now...resetDate, countsDown: true)
-            } else {
-                Text(UsageFormatting.remainingText(remaining))
-            }
+        HStack(alignment: .firstTextBaseline, spacing: size * 0.03) {
+            Text("\(percent)")
+                .font(UsageTypography.primaryValue(size: size))
+            Text("%")
+                .font(UsageTypography.primaryValue(size: size * 0.42))
         }
-        .font(UsageTypography.primaryValue(size: size))
         .minimumScaleFactor(0.6)
         .lineLimit(1)
     }

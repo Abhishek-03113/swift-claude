@@ -85,8 +85,8 @@ targets:
         com.apple.security.application-groups:
           - group.com.orbit.app
 
-# OrbitKit's own tests run with `swift test` and are also reachable from the
-# scheme below, so Cmd-U in Xcode exercises them too.
+# OrbitKit's own tests run with `swift test` (SPM test products aren't valid
+# Xcode scheme test targets, so they aren't listed here).
 schemes:
   Orbit:
     build:
@@ -95,11 +95,5 @@ schemes:
         OrbitWidgetExtension: all
     run:
       config: Debug
-    test:
-      config: Debug
-      targets:
-        - OrbitCoreTests
-        - OrbitProvidersTests
-        - OrbitPresentationTests
     archive:
       config: Release

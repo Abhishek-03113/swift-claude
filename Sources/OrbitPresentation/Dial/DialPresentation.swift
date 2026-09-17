@@ -44,6 +44,7 @@ public struct DialPresentation: Equatable, Sendable {
 
     /// Center content, resolved for whichever period is currently focused.
     public let focusColor: ColorToken
+    public let focusRemainingPercent: Int
     public let focusRemaining: Duration
     public let focusResetDate: Date
     public let focusPeriodLabel: String
@@ -61,6 +62,7 @@ public struct DialPresentation: Equatable, Sendable {
         selected: SelectedUsagePeriod,
         provider: AgentProvider,
         focusColor: ColorToken,
+        focusRemainingPercent: Int,
         focusRemaining: Duration,
         focusResetDate: Date,
         focusPeriodLabel: String,
@@ -73,6 +75,7 @@ public struct DialPresentation: Equatable, Sendable {
         self.selected = selected
         self.provider = provider
         self.focusColor = focusColor
+        self.focusRemainingPercent = focusRemainingPercent
         self.focusRemaining = focusRemaining
         self.focusResetDate = focusResetDate
         self.focusPeriodLabel = focusPeriodLabel
