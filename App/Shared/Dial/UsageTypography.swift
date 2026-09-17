@@ -17,7 +17,15 @@ enum UsageTypography {
         .system(size: size, weight: .semibold)
     }
 
+    /// Letter-spacing for the period label at its display size.
     static let periodLabelTracking: CGFloat = 2.2
+
+    /// Tracking as a ratio of the font size. Held fixed, 2.2pt of spacing on a
+    /// 9pt label is proportionally more than twice what it is on a 20pt one,
+    /// and "WEEKLY" outgrows the dial's core at the smaller widget sizes.
+    static func periodLabelTracking(forSize size: CGFloat) -> CGFloat {
+        min(periodLabelTracking, size * 0.13)
+    }
 
     static func metadata(size: CGFloat) -> Font {
         .system(size: size).monospacedDigit()

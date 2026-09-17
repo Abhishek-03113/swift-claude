@@ -28,10 +28,12 @@ struct OrbitWidget: Widget {
 } timeline: {
     OrbitTimelineEntry.preview(selected: .session)
     OrbitTimelineEntry.preview(selected: .weekly)
+    OrbitTimelineEntry.preview(loadState: .failed(.unavailable))
 }
 
 #Preview(as: .systemLarge) {
     OrbitWidget()
 } timeline: {
+    OrbitTimelineEntry.preview(selected: .session)
     OrbitTimelineEntry.preview(selected: .weekly)
 }

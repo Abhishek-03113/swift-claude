@@ -45,10 +45,17 @@ struct OrbitWidgetView: View {
 
     @ViewBuilder
     private func dial(presentation: DialPresentation, layout: DialLayout) -> some View {
-        if family == .systemSmall {
+        switch family {
+        case .systemSmall:
+            // No chrome at all: at this size the dial *is* the widget, and a
+            // badge or caption would only steal diameter from it.
             UsageDialContainer(presentation: presentation, layout: layout)
-                .padding(8)
-        } else {
+                .padding(6)
+
+        case .systemMedium:
+            MediumDialLayout(presentation: presentation, layout: layout)
+
+        default:
             VStack(spacing: 6) {
                 if layout.showsProviderBadge {
                     HStack {
@@ -72,6 +79,71 @@ struct OrbitWidgetView: View {
     }
 }
 
+/// The wide widget, laid out along the axis it actually has.
+///
+/// A medium widget is roughly 2:1, so sizing the dial off `min(width, height)`
+/// — which is what the dial does internally, correctly, for a square — leaves
+/// the whole second half of the widget empty. Here the dial takes a square
+/// column at full height and the details take the rest, which is also what
+/// lets the core drop to two lines: the reset line has somewhere better to be.
+private struct MediumDialLayout: View {
+    let presentation: DialPresentation
+    let layout: DialLayout
+
+    var body: some View {
+        HStack(spacing: 14) {
+            // A square whose side is the widget's height, so the dial is as
+            // large as the short axis allows rather than as large as the
+            // leftovers of a vertical stack allow.
+            Color.clear
+                .aspectRatio(1, contentMode: .fit)
+                .overlay(UsageDialContainer(presentation: presentation, layout: layout))
+                .layoutPriority(1)
+
+            DialDetailColumn(presentation: presentation)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(12)
+    }
+}
+
+/// The text that no longer fits inside a two-line core, set at sizes that
+/// don't depend on the dial's diameter — this column has real width.
+private struct DialDetailColumn: View {
+    let presentation: DialPresentation
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ProviderBadge(provider: presentation.provider, size: 11)
+
+            Spacer(minLength: 0)
+
+            Text("\(UsageFormatting.durationText(presentation.focusTimeUntilReset)) left")
+                .font(UsageTypography.primaryValue(size: 20))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+
+            Text(presentation.lastUpdatedText ?? presentation.focusResetText)
+                .font(UsageTypography.metadata(size: 11))
+                .foregroundStyle(.white.opacity(UsageOpacity.secondary))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+
+            Spacer(minLength: 0)
+
+            // The period that isn't focused, as a hint that the dial is
+            // tappable rather than as data.
+            Text(presentation.secondaryPeriodLabel)
+                .font(UsageTypography.periodLabel(size: 9))
+                .tracking(UsageTypography.periodLabelTracking(forSize: 9))
+                .foregroundStyle(.white.opacity(UsageOpacity.inactive))
+                .lineLimit(1)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
 /// Keeps the dial's silhouette on screen — dim, static rings rather than a
 /// spinner — while the first read is in flight.
 private struct LoadingDialPlaceholder: View {
@@ -88,6 +160,7 @@ private struct LoadingDialPlaceholder: View {
                 Color.clear
             }
         }
+        .padding(8)
         .accessibilityLabel("Loading usage")
     }
 }
@@ -99,24 +172,34 @@ private struct LoadingDialPlaceholder: View {
 /// reads the app's cache and cannot run a provider's CLI itself. If the app
 /// isn't running the tap does nothing, which is why the copy names Orbit.
 private struct UsageUnavailableView: View {
+    @Environment(\.widgetFamily) private var family
+
     let provider: AgentProvider
 
     var body: some View {
-        VStack(spacing: 8) {
-            Image(systemName: provider.symbolName)
-                .font(.system(size: 20, weight: .medium))
-                .foregroundStyle(.white.opacity(UsageOpacity.secondary))
-            Text("Usage unavailable")
-                .font(UsageTypography.periodLabel(size: 12))
-                .foregroundStyle(.white)
-            Button(intent: RefreshUsageIntent()) {
-                Text("Refresh")
-                    .font(UsageTypography.metadata(size: 11))
+        // The whole surface is the button: at small sizes there is no room for
+        // a separate control, and a tap anywhere meaning "try again" is the
+        // behaviour people expect from a widget showing nothing useful.
+        Button(intent: RefreshUsageIntent()) {
+            VStack(spacing: family == .systemSmall ? 4 : 8) {
+                Image(systemName: provider.symbolName)
+                    .font(.system(size: family == .systemSmall ? 16 : 20, weight: .medium))
                     .foregroundStyle(.white.opacity(UsageOpacity.secondary))
+                Text("Usage unavailable")
+                    .font(UsageTypography.periodLabel(size: family == .systemSmall ? 10 : 12))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Text("Tap to refresh")
+                    .font(UsageTypography.metadata(size: family == .systemSmall ? 9 : 11))
+                    .foregroundStyle(.white.opacity(UsageOpacity.secondary))
+                    .lineLimit(1)
             }
-            .buttonStyle(.plain)
+            .padding(8)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(provider.name) usage unavailable. Refresh, or open Orbit if it isn't running.")
     }

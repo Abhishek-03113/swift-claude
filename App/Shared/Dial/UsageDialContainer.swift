@@ -44,6 +44,12 @@ struct UsageDialContainer: View {
             let focusColor = Color(presentation.focusColor)
 
             ZStack {
+                // Drawn first, so the dial's own targets sit above it and keep
+                // winning hit-testing. This only catches the taps that fall
+                // outside the rings — the corners a circular target can never
+                // cover — and treats them as "refresh", which is the useful
+                // reading of a tap on a widget that shows a number.
+                backgroundRefreshTarget
                 bloom(diameter: diameter, color: focusColor)
                 startMarker(diameter: diameter, color: focusColor)
                 ring(presentation.outer, style: .outer, diameter: diameter)
@@ -101,6 +107,25 @@ struct UsageDialContainer: View {
             accessibilityLabel: ring.accessibilityLabel
         )
         .frame(width: diameter, height: diameter)
+    }
+
+    /// Catches taps that miss both rings. Only the widget gets one: in the app
+    /// the dial sits in a window with its own refresh affordances, and a
+    /// full-bleed button there would swallow clicks meant for the layout
+    /// around it.
+    @ViewBuilder
+    private var backgroundRefreshTarget: some View {
+        switch selectionBehavior {
+        case .appIntent:
+            Button(intent: RefreshUsageIntent()) {
+                Rectangle().fill(.clear).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Refresh usage")
+
+        case .action:
+            Color.clear
+        }
     }
 
     /// Layered hit regions, mirroring the approved design: the full disc
@@ -184,7 +209,7 @@ struct UsageDialContainer: View {
             UsageCenterContent(
                 presentation: presentation,
                 diameter: coreDiameter,
-                showsResetLine: layout.showsResetLine
+                detail: layout.centerDetail
             )
             .frame(width: coreDiameter, height: coreDiameter)
         }

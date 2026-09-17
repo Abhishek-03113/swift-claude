@@ -7,6 +7,9 @@ extension DialLayout {
         switch family {
         case .systemSmall: return .compact
         case .systemLarge, .systemExtraLarge: return .expanded
+        // Medium is wide, not tall: the dial sits beside its details, so the
+        // core carries less and the dial fills the short axis.
+        case .systemMedium: return .split
         default: return .standard
         }
     }
