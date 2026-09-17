@@ -58,8 +58,8 @@ public enum DialPresentationBuilder {
             selected: selected,
             provider: snapshot.provider,
             focusColor: sessionIsFocused ? sessionColor : weeklyColor,
-            focusRemainingPercent: Int(((1 - focus.progress) * 100).rounded()),
-            focusRemaining: focus.remaining,
+            focusRemainingPercent: focus.remainingPercent,
+            focusTimeUntilReset: focus.timeUntilReset(now: now),
             focusResetDate: focus.resetDate,
             focusPeriodLabel: sessionIsFocused ? "SESSION" : "WEEKLY",
             focusResetText: UsageFormatting.resetText(for: focus.type, resetDate: focus.resetDate, now: now),
@@ -123,9 +123,8 @@ public enum DialPresentationBuilder {
         period: UsagePeriod,
         now: Date
     ) -> String {
-        let remaining = UsageFormatting.spokenRemainingText(period.remaining)
         let reset = UsageFormatting.resetText(for: period.type, resetDate: period.resetDate, now: now)
         let sentenceCasedReset = reset.prefix(1).uppercased() + reset.dropFirst()
-        return "\(provider.name) \(periodName) usage: \(remaining) remaining of a \(limitDescription). \(sentenceCasedReset)."
+        return "\(provider.name) \(periodName) usage: \(period.usedPercent) percent of the \(limitDescription) used, \(period.remainingPercent) percent remaining. \(sentenceCasedReset)."
     }
 }

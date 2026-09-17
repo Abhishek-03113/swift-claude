@@ -3,21 +3,21 @@ import XCTest
 
 final class UsageFormattingTests: XCTestCase {
     func testRemainingTextUsesHoursAndMinutesUnderADay() {
-        XCTAssertEqual(UsageFormatting.remainingText(.seconds(2 * 3600 + 17 * 60)), "2h 17m")
+        XCTAssertEqual(UsageFormatting.durationText(.seconds(2 * 3600 + 17 * 60)), "2h 17m")
     }
 
     func testRemainingTextUsesDaysAndHoursOverADay() {
-        XCTAssertEqual(UsageFormatting.remainingText(.seconds(2 * 86400 + 8 * 3600)), "2d 8h")
+        XCTAssertEqual(UsageFormatting.durationText(.seconds(2 * 86400 + 8 * 3600)), "2d 8h")
     }
 
     func testRemainingTextUnderAnHourOmitsHours() {
-        XCTAssertEqual(UsageFormatting.remainingText(.seconds(45 * 60)), "45m")
+        XCTAssertEqual(UsageFormatting.durationText(.seconds(45 * 60)), "45m")
     }
 
     func testRemainingTextFloorsAtZeroMinutesNeverNegative() {
-        XCTAssertEqual(UsageFormatting.remainingText(.seconds(-30)), "0m")
-        XCTAssertEqual(UsageFormatting.remainingText(.seconds(-86400)), "0m")
-        XCTAssertEqual(UsageFormatting.remainingText(.seconds(0)), "0m")
+        XCTAssertEqual(UsageFormatting.durationText(.seconds(-30)), "0m")
+        XCTAssertEqual(UsageFormatting.durationText(.seconds(-86400)), "0m")
+        XCTAssertEqual(UsageFormatting.durationText(.seconds(0)), "0m")
     }
 
     func testResetTextForSessionIsACountdown() {
@@ -39,10 +39,10 @@ final class UsageFormattingTests: XCTestCase {
     }
 
     func testSpokenRemainingTextSpellsOutUnits() {
-        XCTAssertEqual(UsageFormatting.spokenRemainingText(.seconds(2 * 3600 + 17 * 60)), "2 hours 17 minutes")
-        XCTAssertEqual(UsageFormatting.spokenRemainingText(.seconds(60)), "1 minute")
-        XCTAssertEqual(UsageFormatting.spokenRemainingText(.seconds(0)), "0 minutes")
-        XCTAssertEqual(UsageFormatting.spokenRemainingText(.seconds(86400 + 3600)), "1 day 1 hour")
+        XCTAssertEqual(UsageFormatting.spokenDurationText(.seconds(2 * 3600 + 17 * 60)), "2 hours 17 minutes")
+        XCTAssertEqual(UsageFormatting.spokenDurationText(.seconds(60)), "1 minute")
+        XCTAssertEqual(UsageFormatting.spokenDurationText(.seconds(0)), "0 minutes")
+        XCTAssertEqual(UsageFormatting.spokenDurationText(.seconds(86400 + 3600)), "1 day 1 hour")
     }
 
     func testUpdatedAgoTextBucketsByMinuteThenHour() {
