@@ -34,16 +34,18 @@ final class AgentUsageStore {
 
     private let selectionStore: SelectedPeriodStore
     private let scheduler: PeriodicRefreshScheduler
-    private var refreshObserver: NSObjectProtocol?
+    // Read and cleared only from deinit's nonisolated context, so it can't be
+    // `@MainActor`-isolated like the rest of this class's storage.
+    private nonisolated(unsafe) var refreshObserver: NSObjectProtocol?
 
     init(
         agents: [AgentSlot] = AgentCatalog.live(),
         selectionStore: SelectedPeriodStore = .shared,
-        scheduler: PeriodicRefreshScheduler = PeriodicRefreshScheduler()
+        scheduler: PeriodicRefreshScheduler? = nil
     ) {
         self.agents = agents
         self.selectionStore = selectionStore
-        self.scheduler = scheduler
+        self.scheduler = scheduler ?? PeriodicRefreshScheduler()
         self.selectedPeriod = selectionStore.load()
         self.states = agents.reduce(into: [:]) { states, agent in
             states[agent.id] = agent.isConnected ? .loading : .failed(.unavailable)
