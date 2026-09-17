@@ -8,17 +8,29 @@ import OrbitCore
 /// missing quota section — is testable against fixture strings without
 /// spawning anything.
 ///
-/// The shape it reads:
+/// Two shapes appear, and both must parse, because which one the CLI prints
+/// depends on whether stdout is a terminal:
 ///
-/// ```text
-/// Current session
-/// ███                                                6% used
-/// Resets 8:40pm (Asia/Calcutta)
+/// - **Interactive (TUI).** A header line, a progress bar, a reset line:
 ///
-/// Current week (all models)
-/// ████████████▌                                      25% used
-/// Resets Sep 21 at 1:30am (Asia/Calcutta)
-/// ```
+///   ```text
+///   Current session
+///   ███                                                6% used
+///   Resets 8:40pm (Asia/Calcutta)
+///
+///   Current week (all models)
+///   ████████████▌                                      25% used
+///   Resets Sep 21 at 1:30am (Asia/Calcutta)
+///   ```
+///
+/// - **Piped.** One line per quota, label and values separated by a colon and
+///   a `·`. This is what the app actually receives — it always runs the CLI
+///   with piped stdout — so it is the shape that matters most:
+///
+///   ```text
+///   Current session: 59% used · resets Sep 17 at 8:40pm (Asia/Calcutta)
+///   Current week (all models): 32% used · resets Sep 21 at 1:30am (Asia/Calcutta)
+///   ```
 public enum ClaudeUsageTextParser {
     /// A quota section recognized in the output.
     enum Section {
@@ -59,6 +71,16 @@ public enum ClaudeUsageTextParser {
             if let section = section(for: trimmed) {
                 current = section
                 pendingPercent = nil
+
+                // The piped form puts everything on the header line. Take the
+                // percent and reset from it directly; if either is absent this
+                // is the multi-line form and the next lines supply them.
+                if let percent = percentUsed(in: trimmed) {
+                    pendingPercent = percent
+                    if let resetText = resetClause(in: trimmed) {
+                        try finishSection(resetDate: ClaudeResetDateParser.date(from: resetText, now: now))
+                    }
+                }
                 continue
             }
 
@@ -90,7 +112,12 @@ public enum ClaudeUsageTextParser {
     }
 
     private static func section(for line: String) -> Section? {
-        let lowered = line.lowercased()
+        // In the piped form the header is a label followed by a colon and the
+        // values; the label alone is what identifies the quota. Splitting here
+        // also keeps the timezone's "(Asia/Calcutta)" out of the model lookup
+        // below.
+        let label = line.split(separator: ":", maxSplits: 1).first.map(String.init) ?? line
+        let lowered = label.lowercased()
         guard lowered.hasPrefix("current ") else { return nil }
 
         if lowered.hasPrefix("current session") { return .session }
@@ -98,10 +125,10 @@ public enum ClaudeUsageTextParser {
 
         // "Current week (all models)" is the overall weekly cap; anything
         // else in parentheses is a model-specific one.
-        if let parenthesized = line.firstMatch(of: #"\(([^)]*)\)"#, group: 1) {
-            let label = parenthesized.trimmingCharacters(in: .whitespaces)
-            if label.lowercased() != "all models" {
-                return .modelWeekly(label)
+        if let parenthesized = label.firstMatch(of: #"\(([^)]*)\)"#, group: 1) {
+            let model = parenthesized.trimmingCharacters(in: .whitespaces)
+            if model.lowercased() != "all models" {
+                return .modelWeekly(model)
             }
         }
         return .weekly
@@ -114,9 +141,19 @@ public enum ClaudeUsageTextParser {
         return Double(match)
     }
 
-    /// "Resets 8:40pm (Asia/Calcutta)" -> "8:40pm (Asia/Calcutta)".
+    /// The reset clause, from either shape:
+    ///
+    /// ```text
+    /// Resets 8:40pm (Asia/Calcutta)                   -> 8:40pm (Asia/Calcutta)
+    /// ... 59% used · resets Sep 17 at 8:40pm (…)      -> Sep 17 at 8:40pm (…)
+    /// ```
+    ///
+    /// "resets" is matched either at the start of the line or after the `·`
+    /// separator, rather than anywhere, so a sentence that merely mentions the
+    /// word cannot be read as a reset time.
     private static func resetClause(in line: String) -> String? {
-        line.firstMatch(of: #"(?i)^resets\s+(.+)$"#, group: 1)
+        line.firstMatch(of: #"(?i)(?:^|·\s*)resets\s+(.+)$"#, group: 1)?
+            .trimmingCharacters(in: .whitespaces)
     }
 
     /// Claude Code omits ANSI styling when stdout is a pipe, but strip it
