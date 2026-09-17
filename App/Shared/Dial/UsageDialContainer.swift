@@ -1,17 +1,27 @@
 import OrbitCore
 import OrbitPresentation
 import SwiftUI
-import WidgetKit
+
+/// How tapping a ring changes the selection.
+///
+/// The widget and the app cannot share one mechanism: a widget can only act
+/// through an `AppIntent`, while the app just mutates its own state. The
+/// dial itself stays identical either way.
+enum DialSelectionBehavior {
+    case appIntent
+    case action((SelectedUsagePeriod) -> Void)
+}
 
 /// The complete instrument: outer (weekly) ring, inner (session) ring, the
 /// glass core with its center content, a soft bloom behind everything, and
-/// the two tap targets that drive `SelectUsagePeriodIntent`.
+/// the two tap targets that change the focused period.
 ///
 /// Driven entirely by `DialPresentation` — no usage math, no provider
 /// vocabulary.
 struct UsageDialContainer: View {
     let presentation: DialPresentation
     let layout: DialLayout
+    var selectionBehavior: DialSelectionBehavior = .appIntent
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -61,13 +71,25 @@ struct UsageDialContainer: View {
         }
     }
 
+    @ViewBuilder
     private func selectionTarget(_ period: SelectedUsagePeriod, diameter: CGFloat, label: String) -> some View {
-        Button(intent: SelectUsagePeriodIntent(period: period)) {
-            Circle().fill(.clear).contentShape(Circle())
+        switch selectionBehavior {
+        case .appIntent:
+            Button(intent: SelectUsagePeriodIntent(period: period)) {
+                Circle().fill(.clear).contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .frame(width: diameter, height: diameter)
+            .accessibilityLabel(label)
+
+        case .action(let select):
+            Button { select(period) } label: {
+                Circle().fill(.clear).contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .frame(width: diameter, height: diameter)
+            .accessibilityLabel(label)
         }
-        .buttonStyle(.plain)
-        .frame(width: diameter, height: diameter)
-        .accessibilityLabel(label)
     }
 
     private func bloom(diameter: CGFloat, color: Color) -> some View {

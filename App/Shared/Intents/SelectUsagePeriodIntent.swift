@@ -27,7 +27,7 @@ struct SelectUsagePeriodIntent: AppIntent {
 
     func perform() async throws -> some IntentResult {
         SelectedPeriodStore.shared.save(period.selection)
-        WidgetCenter.shared.reloadTimelines(ofKind: OrbitWidget.kind)
+        WidgetCenter.shared.reloadTimelines(ofKind: OrbitWidgetKind.identifier)
         return .result()
     }
 }
