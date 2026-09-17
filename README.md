@@ -107,6 +107,43 @@ Both render the same `UsageDialContainer`, differing only in how a tap is
 handled — an `AppIntent` in the widget, plain state in the app — which the
 `DialSelectionBehavior` parameter carries.
 
+## Refreshing
+
+No polling loop. Usage is re-read on three triggers:
+
+- **Every ten minutes**, via `NSBackgroundActivityScheduler` — the macOS
+  mechanism for periodic maintenance, so the system can slide the firing time
+  and hold it off on battery rather than waking the machine on a strict
+  drumbeat. It runs only while the app is running; refreshing with the app
+  closed would need a LaunchAgent and a separate helper.
+- **On tapping the widget.** The tap cannot fetch — the extension is
+  sandboxed — so it posts a `RefreshSignal` distributed notification and the
+  app does the work, then reloads the timeline. Fire-and-forget by design: if
+  the app isn't running there is no observer, and the widget keeps showing its
+  last reading rather than launching anything.
+- **On demand**, from the app's toolbar.
+
+The widget's own timeline asks WidgetKit to re-read the cache every ten
+minutes to match.
+
+## The sweep
+
+On every completed refresh the app's dial winds both rings up from zero to
+their real values, like a speedometer sweeping on ignition. The spring is
+underdamped so the needle overruns and settles; `UsageRing` clamps at 1, so
+the overshoot can never draw more than a full ring. `AgentUsageStore.refreshToken`
+drives it, so a refresh returning identical numbers still reads as something
+having happened. `accessibilityReduceMotion` skips straight to the value.
+
+`UsageRing` conforms to `Animatable` to make this work at all: a `Canvas`
+reads its inputs inside a closure, and SwiftUI cannot interpolate those
+without `animatableData`.
+
+**The widget does not sweep.** WidgetKit renders archived snapshots rather
+than running an animation loop, so a timed 0 -> value sweep is not something
+a widget can perform. It gets the system's transition between timeline
+entries instead.
+
 ## Reading usage
 
 `ClaudeCodeCLIUsageClient` runs `claude -p "/usage"` and hands the output to

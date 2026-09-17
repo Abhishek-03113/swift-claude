@@ -52,6 +52,10 @@ private struct RemainingPercentText: View {
         HStack(alignment: .firstTextBaseline, spacing: size * 0.03) {
             Text("\(percent)")
                 .font(UsageTypography.primaryValue(size: size))
+                // Rolls the digits rather than swapping them, so the number
+                // settles with the sweep instead of snapping ahead of it.
+                .contentTransition(.numericText())
+                .animation(.easeInOut(duration: 0.5), value: percent)
             Text("%")
                 .font(UsageTypography.primaryValue(size: size * 0.42))
         }

@@ -8,8 +8,13 @@ import SwiftUI
 ///
 /// `progress` is the *used* fraction (0...1) — lit ticks represent
 /// consumption, matching the product rule of ring = used, center = remaining.
-struct UsageRing: View {
-    let progress: Double
+///
+/// Conforms to `Animatable` so progress changes redraw frame by frame. A
+/// `Canvas` reads its inputs inside a closure and SwiftUI cannot interpolate
+/// those on its own; without `animatableData` the ring would jump straight to
+/// its new value and the caller's sweep animation would have nothing to drive.
+struct UsageRing: View, Animatable {
+    var progress: Double
     let style: RingStyle
     let accent: Color
     let trackOpacity: Double
@@ -18,6 +23,13 @@ struct UsageRing: View {
     let accessibilityLabel: String
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Interpolated by SwiftUI during an animation. Clamped on the way in, so
+    /// a spring that overshoots past 1 still cannot overdraw the arc.
+    var animatableData: Double {
+        get { progress }
+        set { progress = min(max(newValue, 0), 1) }
+    }
 
     /// Initializes a ring, clamping `progress` so an out-of-range value can
     /// never overdraw the arc.
@@ -46,7 +58,8 @@ struct UsageRing: View {
         .accessibilityElement()
         .accessibilityLabel(accessibilityLabel)
         .accessibilityValue("\(Int(progress * 100)) percent used")
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.5), value: progress)
+        // Progress is animated by whoever changes it — the dial's sweep owns
+        // that timing, and an animation here would override the spring.
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: arcOpacity)
     }
 

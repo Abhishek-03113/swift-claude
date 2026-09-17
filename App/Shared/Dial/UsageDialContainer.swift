@@ -23,7 +23,20 @@ struct UsageDialContainer: View {
     let layout: DialLayout
     var selectionBehavior: DialSelectionBehavior = .appIntent
 
+    /// Replays the speedometer sweep whenever this value changes; `nil`
+    /// disables the sweep entirely.
+    ///
+    /// The widget passes `nil`: WidgetKit renders archived snapshots rather
+    /// than running an animation loop, so a timed 0 -> value sweep is not
+    /// something it can perform. The app drives it with its refresh counter.
+    var sweepToken: Int?
+
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// How far through the sweep the rings currently are. Multiplies both
+    /// rings' progress, so they wind up together like a needle sweep on
+    /// ignition rather than animating independently.
+    @State private var sweepFraction: Double = 1
 
     var body: some View {
         GeometryReader { proxy in
@@ -46,11 +59,40 @@ struct UsageDialContainer: View {
             )
         }
         .accessibilityElement(children: .contain)
+        .onAppear { replaySweep() }
+        .onChange(of: sweepToken) { _, _ in replaySweep() }
+    }
+
+    /// Winds both rings up from zero to their real values.
+    ///
+    /// The spring is deliberately underdamped: a speedometer needle overruns
+    /// its mark and settles back, and `UsageRing` clamps at 1 so the overshoot
+    /// can never draw more than a full ring.
+    private func replaySweep() {
+        guard sweepToken != nil else {
+            sweepFraction = 1
+            return
+        }
+        guard !reduceMotion else {
+            sweepFraction = 1
+            return
+        }
+
+        // Committed without animation first, so the rings are actually at
+        // zero before the spring starts rather than animating from wherever
+        // they happened to be.
+        withTransaction(Transaction(animation: nil)) { sweepFraction = 0 }
+
+        Task { @MainActor in
+            withAnimation(.interpolatingSpring(stiffness: 42, damping: 9)) {
+                sweepFraction = 1
+            }
+        }
     }
 
     private func ring(_ ring: RingPresentation, style: RingStyle, diameter: CGFloat) -> some View {
         UsageRing(
-            progress: ring.progress,
+            progress: ring.progress * sweepFraction,
             style: style,
             accent: Color(ring.color),
             trackOpacity: ring.trackOpacity,

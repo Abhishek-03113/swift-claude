@@ -60,7 +60,8 @@ struct AgentDetailView: View {
         UsageDialContainer(
             presentation: presentation,
             layout: .app,
-            selectionBehavior: .action { store.selectedPeriod = $0 }
+            selectionBehavior: .action { store.selectedPeriod = $0 },
+            sweepToken: store.refreshToken
         )
         .frame(width: 260, height: 260)
         // The instrument keeps its own dark environment inside the app's

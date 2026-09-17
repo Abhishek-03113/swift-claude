@@ -9,14 +9,20 @@ import WidgetKit
 /// focused period, and whether a refresh is in flight.
 ///
 /// The app is the only place that can actually fetch — a widget extension is
-/// sandboxed and cannot run a provider's CLI — so refreshing here is also
-/// what keeps the widget's cache current.
+/// sandboxed and cannot run a provider's CLI — so this is also what keeps the
+/// widget's cache current, on three triggers: launch, the ten-minute
+/// scheduler, and a tap on the widget relayed through `RefreshSignal`.
 @MainActor
 @Observable
 final class AgentUsageStore {
     private(set) var states: [String: UsageLoadState] = [:]
     private(set) var isRefreshing = false
     private(set) var lastRefreshed: Date?
+
+    /// Bumped after every completed refresh. The dial watches it to replay
+    /// its sweep, so a refresh that returns identical numbers still reads as
+    /// "something just happened".
+    private(set) var refreshToken = 0
 
     /// Shared with the widget through the App Group, so switching period in
     /// one is reflected in the other.
@@ -27,18 +33,47 @@ final class AgentUsageStore {
     let agents: [AgentSlot]
 
     private let selectionStore: SelectedPeriodStore
+    private let scheduler: PeriodicRefreshScheduler
+    private var refreshObserver: NSObjectProtocol?
 
-    init(agents: [AgentSlot] = AgentCatalog.live(), selectionStore: SelectedPeriodStore = .shared) {
+    init(
+        agents: [AgentSlot] = AgentCatalog.live(),
+        selectionStore: SelectedPeriodStore = .shared,
+        scheduler: PeriodicRefreshScheduler = PeriodicRefreshScheduler()
+    ) {
         self.agents = agents
         self.selectionStore = selectionStore
+        self.scheduler = scheduler
         self.selectedPeriod = selectionStore.load()
         self.states = agents.reduce(into: [:]) { states, agent in
             states[agent.id] = agent.isConnected ? .loading : .failed(.unavailable)
         }
     }
 
+    deinit {
+        if let refreshObserver {
+            DistributedNotificationCenter.default().removeObserver(refreshObserver)
+        }
+    }
+
     func state(for agent: AgentSlot) -> UsageLoadState {
         states[agent.id] ?? .loading
+    }
+
+    /// Called once when the window appears: fetch now, then keep fetching on
+    /// the scheduler and whenever the widget asks.
+    func start() async {
+        if refreshObserver == nil {
+            refreshObserver = RefreshSignal.observe { [weak self] in
+                Task { @MainActor in await self?.refreshAll() }
+            }
+        }
+
+        scheduler.start { [weak self] in
+            await self?.refreshAll()
+        }
+
+        await refreshAll()
     }
 
     func refreshAll() async {
@@ -52,6 +87,7 @@ final class AgentUsageStore {
         }
 
         lastRefreshed = .now
+        refreshToken += 1
         // The cache the app just wrote is what the widget reads.
         WidgetCenter.shared.reloadAllTimelines()
     }

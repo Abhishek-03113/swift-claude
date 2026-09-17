@@ -95,9 +95,9 @@ private struct LoadingDialPlaceholder: View {
 /// Preserves provider identity and offers a next step, without destroying the
 /// widget's visual identity with a raw error dump.
 ///
-/// The next step is always "open Orbit": the widget reads the app's cache and
-/// cannot refresh on its own, so pointing at a retry it can't perform would
-/// be a lie.
+/// The retry asks the app to re-read rather than fetching here — the widget
+/// reads the app's cache and cannot run a provider's CLI itself. If the app
+/// isn't running the tap does nothing, which is why the copy names Orbit.
 private struct UsageUnavailableView: View {
     let provider: AgentProvider
 
@@ -109,12 +109,15 @@ private struct UsageUnavailableView: View {
             Text("Usage unavailable")
                 .font(UsageTypography.periodLabel(size: 12))
                 .foregroundStyle(.white)
-            Text("Open Orbit")
-                .font(UsageTypography.metadata(size: 11))
-                .foregroundStyle(.white.opacity(UsageOpacity.secondary))
+            Button(intent: RefreshUsageIntent()) {
+                Text("Refresh")
+                    .font(UsageTypography.metadata(size: 11))
+                    .foregroundStyle(.white.opacity(UsageOpacity.secondary))
+            }
+            .buttonStyle(.plain)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(provider.name) usage unavailable. Open Orbit to refresh.")
+        .accessibilityLabel("\(provider.name) usage unavailable. Refresh, or open Orbit if it isn't running.")
     }
 }

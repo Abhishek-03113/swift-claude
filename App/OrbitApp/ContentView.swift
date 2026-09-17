@@ -43,7 +43,7 @@ struct ContentView: View {
             }
         }
         .task {
-            await store.refreshAll()
+            await store.start()
         }
     }
 }
