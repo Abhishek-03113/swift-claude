@@ -8,9 +8,14 @@ public struct ClaudeCodeUsageReading: Equatable, Sendable {
     public let periods: [UsagePeriod]
     public let generatedAt: Date
 
-    public init(periods: [UsagePeriod], generatedAt: Date) {
+    /// Only the API client populates this; the CLI text fallback has no way
+    /// to produce it.
+    public let analytics: ClaudeUsageAnalytics?
+
+    public init(periods: [UsagePeriod], generatedAt: Date, analytics: ClaudeUsageAnalytics? = nil) {
         self.periods = periods
         self.generatedAt = generatedAt
+        self.analytics = analytics
     }
 }
 

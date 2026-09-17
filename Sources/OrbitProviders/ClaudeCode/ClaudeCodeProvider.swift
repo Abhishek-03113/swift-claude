@@ -7,7 +7,7 @@ import OrbitCore
 public struct ClaudeCodeProvider: UsageRepository {
     private let client: ClaudeCodeUsageClient
 
-    public init(client: ClaudeCodeUsageClient = ClaudeCodeCLIUsageClient()) {
+    public init(client: ClaudeCodeUsageClient = FallbackClaudeCodeUsageClient()) {
         self.client = client
     }
 
@@ -22,7 +22,8 @@ public struct ClaudeCodeProvider: UsageRepository {
         return UsageSnapshot(
             provider: .claudeCode,
             periods: reading.periods,
-            lastUpdated: reading.generatedAt
+            lastUpdated: reading.generatedAt,
+            analytics: reading.analytics
         )
     }
 }
