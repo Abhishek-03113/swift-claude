@@ -37,15 +37,19 @@ struct AgentDetailView: View {
             selected: store.selectedPeriod,
             staleness: isStale ? .stale(snapshot) : nil
         ) {
-            ScrollView {
-                VStack(spacing: 24) {
-                    dial(presentation)
-                    periodList(snapshot)
-                    footer(snapshot: snapshot, isStale: isStale)
+            GeometryReader { proxy in
+                let metrics = DetailMetrics(size: proxy.size)
+
+                ScrollView {
+                    VStack(spacing: metrics.stackSpacing) {
+                        dial(presentation, diameter: metrics.dialDiameter)
+                        periodList(snapshot, isCompact: metrics.isCompact)
+                        footer(snapshot: snapshot, isStale: isStale)
+                    }
+                    .padding(metrics.padding)
+                    .frame(maxWidth: DetailMetrics.contentMaxWidth)
+                    .frame(maxWidth: .infinity)
                 }
-                .padding(28)
-                .frame(maxWidth: 560)
-                .frame(maxWidth: .infinity)
             }
         } else {
             ContentUnavailableView(
@@ -56,14 +60,14 @@ struct AgentDetailView: View {
         }
     }
 
-    private func dial(_ presentation: DialPresentation) -> some View {
+    private func dial(_ presentation: DialPresentation, diameter: CGFloat) -> some View {
         UsageDialContainer(
             presentation: presentation,
             layout: .app,
             selectionBehavior: .action { store.selectedPeriod = $0 },
             sweepToken: store.refreshToken
         )
-        .frame(width: 260, height: 260)
+        .frame(width: diameter, height: diameter)
         // The instrument keeps its own dark environment inside the app's
         // standard window chrome, exactly as it appears in the widget.
         .padding(20)
@@ -75,11 +79,11 @@ struct AgentDetailView: View {
         .accessibilityHint("Click the outer ring for weekly usage, the center for the session.")
     }
 
-    private func periodList(_ snapshot: UsageSnapshot) -> some View {
+    private func periodList(_ snapshot: UsageSnapshot, isCompact: Bool) -> some View {
         VStack(spacing: 0) {
             ForEach(Array(snapshot.periods.enumerated()), id: \.element.id) { index, period in
                 if index > 0 { Divider() }
-                PeriodRow(period: period)
+                PeriodRow(period: period, isCompact: isCompact)
             }
         }
         .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 12))
@@ -87,13 +91,17 @@ struct AgentDetailView: View {
 
     @ViewBuilder
     private func footer(snapshot: UsageSnapshot, isStale: Bool) -> some View {
-        HStack(spacing: 6) {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
             if isStale {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
                 Text("Showing the last reading Orbit could take — \(UsageFormatting.updatedAgoText(snapshot.lastUpdated)).")
+                    // The stale sentence is long enough to need more than one
+                    // line once the window narrows; without this it truncates.
+                    .fixedSize(horizontal: false, vertical: true)
             } else {
                 Text(UsageFormatting.updatedAgoText(snapshot.lastUpdated).capitalizedFirst)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .font(.callout)
@@ -138,38 +146,114 @@ struct AgentDetailView: View {
     }
 }
 
+/// Every size the detail layout varies with the window, resolved in one place
+/// from the space actually available.
+///
+/// The dial is sized from *both* axes: a short wide window has as little room
+/// for a large instrument as a narrow tall one, and reading only the width
+/// would let the dial push the quota rows off the bottom.
+private struct DetailMetrics {
+    /// Past this the column stops growing and centers — long measures are
+    /// harder to read, and a 2000pt-wide dial is not more informative.
+    static let contentMaxWidth: CGFloat = 560
+
+    private static let dialRange: ClosedRange<CGFloat> = 150...300
+    /// The fraction of the shorter axis the instrument may claim.
+    private static let dialFraction: CGFloat = 0.42
+    /// Below this width the layout switches to its stacked, tighter form.
+    private static let compactWidthThreshold: CGFloat = 420
+
+    let dialDiameter: CGFloat
+    let padding: CGFloat
+    let stackSpacing: CGFloat
+    let isCompact: Bool
+
+    init(size: CGSize) {
+        let shortestSide = min(size.width, size.height)
+        // `max` with the lower bound rather than a plain clamp: when the
+        // window is genuinely tiny the dial holds its floor and the ScrollView
+        // takes over, which is the readable failure mode.
+        let ideal = shortestSide * Self.dialFraction
+        dialDiameter = min(max(ideal, Self.dialRange.lowerBound), Self.dialRange.upperBound)
+
+        isCompact = size.width < Self.compactWidthThreshold
+        padding = isCompact ? 16 : 28
+        stackSpacing = isCompact ? 16 : 24
+    }
+}
+
 /// One quota window, with a plain linear gauge. Deliberately not a second
 /// dial: the instrument earns its complexity once per screen, and these rows
 /// are for reading exact figures.
+///
+/// At narrow widths the figures move below the title instead of competing with
+/// it for the same line — the gauge stays full-width there rather than being
+/// squeezed to nothing beside truncated text.
 private struct PeriodRow: View {
     let period: UsagePeriod
+    let isCompact: Bool
 
     var body: some View {
-        HStack(alignment: .center, spacing: 16) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.headline)
-                Text(UsageFormatting.resetText(for: period.type, resetDate: period.resetDate).capitalizedFirst)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer(minLength: 12)
-
-            VStack(alignment: .trailing, spacing: 4) {
-                Text("\(period.usedPercent)% used")
-                    .font(.system(.body, design: .rounded))
-                    .monospacedDigit()
-                ProgressView(value: period.progress)
-                    .progressViewStyle(.linear)
-                    .tint(Color(UsageColorRamp.token(forUsagePercent: period.progress * 100)))
-                    .frame(width: 120)
+        Group {
+            if isCompact {
+                VStack(alignment: .leading, spacing: 8) {
+                    heading
+                    HStack(spacing: 12) {
+                        gauge
+                        usedValue
+                    }
+                }
+            } else {
+                HStack(alignment: .center, spacing: 16) {
+                    heading
+                    Spacer(minLength: 12)
+                    VStack(alignment: .trailing, spacing: 4) {
+                        usedValue
+                        gauge
+                            // A range rather than a constant, so the gauge
+                            // gives width back to a long title before it
+                            // truncates, and grows a little when there's room.
+                            .frame(minWidth: 90, idealWidth: 140, maxWidth: 180)
+                    }
+                    .layoutPriority(1)
+                }
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, isCompact ? 12 : 16)
         .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(title): \(period.usedPercent) percent used, \(period.remainingPercent) percent remaining.")
+    }
+
+    private var heading: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.headline)
+                .lineLimit(2)
+                .minimumScaleFactor(0.85)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(UsageFormatting.resetText(for: period.type, resetDate: period.resetDate).capitalizedFirst)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var usedValue: some View {
+        Text("\(period.usedPercent)% used")
+            .font(.system(.body, design: .rounded))
+            .monospacedDigit()
+            .lineLimit(1)
+            .fixedSize()
+    }
+
+    private var gauge: some View {
+        ProgressView(value: period.progress)
+            .progressViewStyle(.linear)
+            .tint(Color(UsageColorRamp.token(forUsagePercent: period.progress * 100)))
     }
 
     private var title: String {

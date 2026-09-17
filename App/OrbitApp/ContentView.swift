@@ -22,7 +22,7 @@ struct ContentView: View {
                 AgentSidebarRow(agent: agent, state: store.state(for: agent))
                     .tag(agent.id)
             }
-            .navigationSplitViewColumnWidth(min: 220, ideal: 240)
+            .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 320)
         } detail: {
             if let agent = selectedAgent {
                 AgentDetailView(agent: agent, store: store)
@@ -30,6 +30,15 @@ struct ContentView: View {
                 ContentUnavailableView("No Agent Selected", systemImage: "gauge.with.dots.needle.bottom.50percent")
             }
         }
+        // `.balanced` gives the detail column the remaining width rather than
+        // letting the sidebar prop the window open at its ideal size; the
+        // sidebar's own `max` is what stops it being dragged over the dial.
+        .navigationSplitViewStyle(.balanced)
+        // The window's floor. It belongs here rather than on the scene's root
+        // view: the split view reports its own sizing, which swallows a
+        // minimum declared outside it (the height minimum in particular).
+        // Below this the sidebar and the dial cannot both be read.
+        .frame(minWidth: 620, minHeight: 440)
         .navigationTitle("Orbit")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
