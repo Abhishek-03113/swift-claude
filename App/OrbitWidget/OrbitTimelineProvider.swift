@@ -23,18 +23,28 @@ extension OrbitTimelineEntry {
     }
 }
 
+/// Builds entries from whatever the app last cached.
+///
+/// The widget deliberately does not fetch. Reading Claude Code's usage means
+/// running its CLI, and a widget extension is sandboxed and has no business
+/// spawning processes — so the app refreshes and writes to the App Group, and
+/// this reads it back.
 struct OrbitTimelineProvider: TimelineProvider {
-    /// Session windows are short (5h), so refresh eagerly enough to stay
+    /// Session windows are short (5h), so re-read often enough to stay
     /// believable while staying well inside WidgetKit's refresh budget.
     private static let refreshInterval: TimeInterval = 10 * 60
 
+    /// Past this, the cached reading is labelled stale rather than presented
+    /// as current — the app has not refreshed in a while.
+    private static let stalenessThreshold: TimeInterval = 20 * 60
+
     private let provider: AgentProvider
-    private let repository: CachingUsageRepository
+    private let repository: UsageRepository
     private let selectionStore: SelectedPeriodStore
 
     init(
         provider: AgentProvider = .claudeCode,
-        repository: CachingUsageRepository = CachingUsageRepository(wrapping: ClaudeCodeProvider()),
+        repository: UsageRepository = CachedSnapshotRepository(),
         selectionStore: SelectedPeriodStore = .shared
     ) {
         self.provider = provider
@@ -62,12 +72,21 @@ struct OrbitTimelineProvider: TimelineProvider {
     }
 
     private func currentEntry() async -> OrbitTimelineEntry {
-        let loadState = await repository.loadState()
-        return OrbitTimelineEntry(
+        OrbitTimelineEntry(
             date: .now,
-            loadState: loadState,
+            loadState: await loadState(),
             selected: selectionStore.load(),
             provider: provider
         )
+    }
+
+    private func loadState() async -> UsageLoadState {
+        do {
+            let snapshot = try await repository.snapshot()
+            let age = Date.now.timeIntervalSince(snapshot.lastUpdated)
+            return age > Self.stalenessThreshold ? .stale(snapshot) : .loaded(snapshot)
+        } catch {
+            return .failed(error as? UsageRepositoryError ?? .unavailable)
+        }
     }
 }

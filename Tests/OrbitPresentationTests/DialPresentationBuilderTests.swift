@@ -49,13 +49,26 @@ final class DialPresentationBuilderTests: XCTestCase {
         }
     }
 
+    /// The center reads the *focused* period: its remaining percentage, and
+    /// the time until that window resets (not quota re-expressed as time).
     func testFocusedPeriodDrivesTheCenterValue() throws {
-        let onSession = try build(sessionUsedFraction: 0.25, selected: .session)
-        // A 5-hour session at 25% used leaves 3h 45m.
-        XCTAssertEqual(onSession.focusRemaining.secondsDouble, 5 * 3600 * 0.75, accuracy: 1e-6)
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let snapshot = UsageSnapshot(
+            provider: .claudeCode,
+            periods: [
+                UsagePeriod(id: "session", type: .session, usedFraction: 0.25, resetDate: now.addingTimeInterval(3600)),
+                UsagePeriod(id: "weekly", type: .weekly, usedFraction: 0.60, resetDate: now.addingTimeInterval(4 * 86400)),
+            ],
+            lastUpdated: now
+        )
 
-        let onWeekly = try build(weeklyUsedFraction: 0.25, selected: .weekly)
-        XCTAssertEqual(onWeekly.focusRemaining.secondsDouble, 7 * 24 * 3600 * 0.75, accuracy: 1e-6)
+        let onSession = try XCTUnwrap(DialPresentationBuilder.build(snapshot: snapshot, selected: .session, now: now))
+        XCTAssertEqual(onSession.focusRemainingPercent, 75)
+        XCTAssertEqual(onSession.focusTimeUntilReset.secondsDouble, 3600, accuracy: 1e-6)
+
+        let onWeekly = try XCTUnwrap(DialPresentationBuilder.build(snapshot: snapshot, selected: .weekly, now: now))
+        XCTAssertEqual(onWeekly.focusRemainingPercent, 40)
+        XCTAssertEqual(onWeekly.focusTimeUntilReset.secondsDouble, 4 * 86400, accuracy: 1e-6)
     }
 
     func testFreshSnapshotHasNoUpdatedAgoText() throws {

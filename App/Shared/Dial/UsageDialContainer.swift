@@ -1,19 +1,42 @@
 import OrbitCore
 import OrbitPresentation
 import SwiftUI
-import WidgetKit
+
+/// How tapping a ring changes the selection.
+///
+/// The widget and the app cannot share one mechanism: a widget can only act
+/// through an `AppIntent`, while the app just mutates its own state. The
+/// dial itself stays identical either way.
+enum DialSelectionBehavior {
+    case appIntent
+    case action((SelectedUsagePeriod) -> Void)
+}
 
 /// The complete instrument: outer (weekly) ring, inner (session) ring, the
 /// glass core with its center content, a soft bloom behind everything, and
-/// the two tap targets that drive `SelectUsagePeriodIntent`.
+/// the two tap targets that change the focused period.
 ///
 /// Driven entirely by `DialPresentation` — no usage math, no provider
 /// vocabulary.
 struct UsageDialContainer: View {
     let presentation: DialPresentation
     let layout: DialLayout
+    var selectionBehavior: DialSelectionBehavior = .appIntent
+
+    /// Replays the speedometer sweep whenever this value changes; `nil`
+    /// disables the sweep entirely.
+    ///
+    /// The widget passes `nil`: WidgetKit renders archived snapshots rather
+    /// than running an animation loop, so a timed 0 -> value sweep is not
+    /// something it can perform. The app drives it with its refresh counter.
+    var sweepToken: Int?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// How far through the sweep the rings currently are. Multiplies both
+    /// rings' progress, so they wind up together like a needle sweep on
+    /// ignition rather than animating independently.
+    @State private var sweepFraction: Double = 1
 
     var body: some View {
         GeometryReader { proxy in
@@ -36,11 +59,40 @@ struct UsageDialContainer: View {
             )
         }
         .accessibilityElement(children: .contain)
+        .onAppear { replaySweep() }
+        .onChange(of: sweepToken) { _, _ in replaySweep() }
+    }
+
+    /// Winds both rings up from zero to their real values.
+    ///
+    /// The spring is deliberately underdamped: a speedometer needle overruns
+    /// its mark and settles back, and `UsageRing` clamps at 1 so the overshoot
+    /// can never draw more than a full ring.
+    private func replaySweep() {
+        guard sweepToken != nil else {
+            sweepFraction = 1
+            return
+        }
+        guard !reduceMotion else {
+            sweepFraction = 1
+            return
+        }
+
+        // Committed without animation first, so the rings are actually at
+        // zero before the spring starts rather than animating from wherever
+        // they happened to be.
+        withTransaction(Transaction(animation: nil)) { sweepFraction = 0 }
+
+        Task { @MainActor in
+            withAnimation(.interpolatingSpring(stiffness: 42, damping: 9)) {
+                sweepFraction = 1
+            }
+        }
     }
 
     private func ring(_ ring: RingPresentation, style: RingStyle, diameter: CGFloat) -> some View {
         UsageRing(
-            progress: ring.progress,
+            progress: ring.progress * sweepFraction,
             style: style,
             accent: Color(ring.color),
             trackOpacity: ring.trackOpacity,
@@ -61,13 +113,25 @@ struct UsageDialContainer: View {
         }
     }
 
+    @ViewBuilder
     private func selectionTarget(_ period: SelectedUsagePeriod, diameter: CGFloat, label: String) -> some View {
-        Button(intent: SelectUsagePeriodIntent(period: period)) {
-            Circle().fill(.clear).contentShape(Circle())
+        switch selectionBehavior {
+        case .appIntent:
+            Button(intent: SelectUsagePeriodIntent(period: period)) {
+                Circle().fill(.clear).contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .frame(width: diameter, height: diameter)
+            .accessibilityLabel(label)
+
+        case .action(let select):
+            Button { select(period) } label: {
+                Circle().fill(.clear).contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .frame(width: diameter, height: diameter)
+            .accessibilityLabel(label)
         }
-        .buttonStyle(.plain)
-        .frame(width: diameter, height: diameter)
-        .accessibilityLabel(label)
     }
 
     private func bloom(diameter: CGFloat, color: Color) -> some View {

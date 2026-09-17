@@ -4,9 +4,10 @@ import Foundation
 /// views so short/long durations, the exhausted state and weekly weekday
 /// naming are testable without rendering anything.
 public enum UsageFormatting {
-    /// "2h 17m", "2d 8h", "45m", or "0m" once exhausted. Never negative,
-    /// never a fractional or garbled unit.
-    public static func remainingText(_ duration: Duration) -> String {
+    /// "2h 17m", "2d 8h", "45m", or "0m". Never negative, never a fractional
+    /// or garbled unit. Used for time-until-reset, which is the only "time
+    /// left" figure providers actually report.
+    public static func durationText(_ duration: Duration) -> String {
         let parts = Parts(duration)
         guard parts.totalMinutes > 0 else { return "0m" }
 
@@ -17,7 +18,7 @@ public enum UsageFormatting {
 
     /// Fully spelled out for VoiceOver, e.g. "2 hours 43 minutes", so
     /// accessibility never depends on the visually compact "2h 43m" form.
-    public static func spokenRemainingText(_ duration: Duration) -> String {
+    public static func spokenDurationText(_ duration: Duration) -> String {
         let parts = Parts(duration)
         guard parts.totalMinutes > 0 else { return "0 minutes" }
 
@@ -36,7 +37,7 @@ public enum UsageFormatting {
 
         let isLongWindow = period == .weekly || period == .monthly
         guard isLongWindow, interval >= 24 * 3600 else {
-            return "resets in \(remainingText(.seconds(interval)))"
+            return "resets in \(durationText(.seconds(interval)))"
         }
 
         let formatter = DateFormatter()

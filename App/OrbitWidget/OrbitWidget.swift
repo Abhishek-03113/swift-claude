@@ -4,11 +4,8 @@ import SwiftUI
 import WidgetKit
 
 struct OrbitWidget: Widget {
-    /// Also the reload target for `SelectUsagePeriodIntent`.
-    static let kind = "OrbitWidget"
-
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: Self.kind, provider: OrbitTimelineProvider()) { entry in
+        StaticConfiguration(kind: OrbitWidgetKind.identifier, provider: OrbitTimelineProvider()) { entry in
             OrbitWidgetView(entry: entry)
         }
         .configurationDisplayName("Orbit")

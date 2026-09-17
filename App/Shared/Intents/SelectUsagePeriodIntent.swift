@@ -27,7 +27,13 @@ struct SelectUsagePeriodIntent: AppIntent {
 
     func perform() async throws -> some IntentResult {
         SelectedPeriodStore.shared.save(period.selection)
-        WidgetCenter.shared.reloadTimelines(ofKind: OrbitWidget.kind)
+        WidgetCenter.shared.reloadTimelines(ofKind: OrbitWidgetKind.identifier)
+
+        // Any tap on the dial is also treated as "show me current numbers".
+        // The widget has no room for a separate refresh control, and asking
+        // the app to re-read is cheap and idempotent — if the app isn't
+        // running, nothing happens and the cached reading stays on screen.
+        RefreshSignal.post()
         return .result()
     }
 }

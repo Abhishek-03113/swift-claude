@@ -3,20 +3,32 @@ import OrbitCore
 @testable import OrbitProviders
 
 private struct StubClient: ClaudeCodeUsageClient {
-    let result: Result<ClaudeCodeUsageDTO, UsageRepositoryError>
-    func fetchRawUsage() async throws -> ClaudeCodeUsageDTO { try result.get() }
+    let result: Result<ClaudeCodeUsageReading, UsageRepositoryError>
+    func fetchUsage() async throws -> ClaudeCodeUsageReading { try result.get() }
+}
+
+private func reading(
+    sessionFraction: Double = 0.5,
+    weeklyFraction: Double = 0.25,
+    includeWeekly: Bool = true,
+    at now: Date
+) -> ClaudeCodeUsageReading {
+    var periods = [UsagePeriod(id: "session", type: .session, usedFraction: sessionFraction, resetDate: now)]
+    if includeWeekly {
+        periods.append(UsagePeriod(id: "weekly", type: .weekly, usedFraction: weeklyFraction, resetDate: now))
+    }
+    return ClaudeCodeUsageReading(periods: periods, generatedAt: now)
 }
 
 final class ClaudeCodeProviderTests: XCTestCase {
-    func testProviderNormalizesWhatTheClientReturns() async throws {
-        let now = Date(timeIntervalSince1970: 1_000_000)
-        let dto = ClaudeCodeUsageDTO(
-            session: .init(usedSeconds: 9_000, limitSeconds: 18_000, resetsAt: now),
-            weekly: .init(usedSeconds: 151_200, limitSeconds: 604_800, resetsAt: now),
-            generatedAt: now
-        )
+    private let now = Date(timeIntervalSince1970: 1_000_000)
 
-        let snapshot = try await ClaudeCodeProvider(client: StubClient(result: .success(dto))).snapshot()
+    func testProviderAttributesTheReadingToClaudeCode() async throws {
+        let snapshot = try await ClaudeCodeProvider(
+            client: StubClient(result: .success(reading(at: now)))
+        ).snapshot()
+
+        XCTAssertEqual(snapshot.provider.id, AgentProvider.claudeCode.id)
         XCTAssertEqual(snapshot.lastUpdated, now)
         XCTAssertEqual(snapshot.period(.session)?.progress ?? 0, 0.5, accuracy: 1e-9)
         XCTAssertEqual(snapshot.period(.weekly)?.progress ?? 0, 0.25, accuracy: 1e-9)
@@ -31,51 +43,87 @@ final class ClaudeCodeProviderTests: XCTestCase {
             XCTAssertEqual(error as? UsageRepositoryError, .unavailable)
         }
     }
-}
 
-final class ClaudeCodeLocalFileUsageClientTests: XCTestCase {
-    private func writeTemporaryFile(_ contents: String) throws -> URL {
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("orbit-usage-\(UUID().uuidString).json")
-        try Data(contents.utf8).write(to: url)
-        addTeardownBlock { try? FileManager.default.removeItem(at: url) }
-        return url
-    }
+    /// The dial is built around both windows; half a reading is a failure
+    /// rather than something to render partially.
+    func testReadingMissingTheWeeklyPeriodIsRejected() async {
+        let incomplete = reading(includeWeekly: false, at: now)
+        let provider = ClaudeCodeProvider(client: StubClient(result: .success(incomplete)))
 
-    func testMissingFileReportsUnavailableRatherThanThrowingAFileError() async {
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("orbit-missing-\(UUID().uuidString).json")
         do {
-            _ = try await ClaudeCodeLocalFileUsageClient(fileURL: url).fetchRawUsage()
-            XCTFail("expected fetchRawUsage() to throw")
-        } catch {
-            XCTAssertEqual(error as? UsageRepositoryError, .unavailable)
-        }
-    }
-
-    func testMalformedFileReportsMalformedResponse() async throws {
-        let url = try writeTemporaryFile("{ not json")
-        do {
-            _ = try await ClaudeCodeLocalFileUsageClient(fileURL: url).fetchRawUsage()
-            XCTFail("expected fetchRawUsage() to throw")
+            _ = try await provider.snapshot()
+            XCTFail("expected snapshot() to throw")
         } catch {
             guard case UsageRepositoryError.malformedResponse = error else {
                 return XCTFail("expected malformedResponse, got \(error)")
             }
         }
     }
+}
 
-    func testWellFormedFileDecodesUsingISO8601Dates() async throws {
-        let url = try writeTemporaryFile("""
-        {
-          "session": { "usedSeconds": 8820, "limitSeconds": 18000, "resetsAt": "2026-09-16T21:00:00Z" },
-          "weekly":  { "usedSeconds": 356400, "limitSeconds": 604800, "resetsAt": "2026-09-22T09:00:00Z" },
-          "generatedAt": "2026-09-16T18:00:00Z"
+final class ClaudeCodeCLIUsageClientTests: XCTestCase {
+    private struct FixedOutputRunner: ProcessRunning {
+        let output: String
+        func run(executable: URL, arguments: [String], timeout: Duration) async throws -> String { output }
+    }
+
+    private struct FailingRunner: ProcessRunning {
+        let error: UsageRepositoryError
+        func run(executable: URL, arguments: [String], timeout: Duration) async throws -> String { throw error }
+    }
+
+    private func client(runner: ProcessRunning) -> ClaudeCodeCLIUsageClient {
+        ClaudeCodeCLIUsageClient(
+            executableURL: URL(fileURLWithPath: "/usr/bin/true"),
+            arguments: ["-p", "/usage"],
+            timeout: .seconds(5),
+            runner: runner
+        )
+    }
+
+    func testClientParsesCommandOutput() async throws {
+        let output = """
+        Current session
+        ███   40% used
+        Resets 8:40pm (UTC)
+
+        Current week (all models)
+        ████   70% used
+        Resets Sep 21 at 1:30am (UTC)
+        """
+
+        let reading = try await client(runner: FixedOutputRunner(output: output)).fetchUsage()
+        XCTAssertEqual(reading.periods.first { $0.type == .session }?.progress ?? 0, 0.4, accuracy: 1e-9)
+        XCTAssertEqual(reading.periods.first { $0.type == .weekly }?.progress ?? 0, 0.7, accuracy: 1e-9)
+    }
+
+    func testCommandFailurePropagates() async {
+        do {
+            _ = try await client(runner: FailingRunner(error: .unavailable)).fetchUsage()
+            XCTFail("expected fetchUsage() to throw")
+        } catch {
+            XCTAssertEqual(error as? UsageRepositoryError, .unavailable)
         }
-        """)
+    }
 
-        let dto = try await ClaudeCodeLocalFileUsageClient(fileURL: url).fetchRawUsage()
-        XCTAssertEqual(dto.session.usedSeconds, 8820)
-        XCTAssertEqual(dto.weekly.limitSeconds, 604_800)
+    /// A missing `claude` binary is "unavailable", not a crash — the app
+    /// explains how to fix it rather than failing opaquely.
+    func testMissingExecutableReportsUnavailable() async {
+        let client = ClaudeCodeCLIUsageClient(
+            executableURL: nil,
+            arguments: [],
+            timeout: .seconds(1),
+            runner: FixedOutputRunner(output: "")
+        )
+
+        // Only meaningful when no real `claude` is installed on the test host.
+        guard ClaudeCodeCLIUsageClient.locateExecutable() == nil else { return }
+
+        do {
+            _ = try await client.fetchUsage()
+            XCTFail("expected fetchUsage() to throw")
+        } catch {
+            XCTAssertEqual(error as? UsageRepositoryError, .unavailable)
+        }
     }
 }

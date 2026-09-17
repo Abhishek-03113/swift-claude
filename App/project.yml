@@ -12,6 +12,14 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     DEVELOPMENT_TEAM: "" # TODO: set your Apple Developer Team ID
 
+    # The App Group both targets share. macOS requires a team-ID prefix for a
+    # NON-SANDBOXED app, and the app has to be non-sandboxed to run the
+    # `claude` CLI — so once DEVELOPMENT_TEAM is set, change this to
+    # "$(DEVELOPMENT_TEAM).group.com.orbit.app" and keep both targets on it.
+    # The app and the widget must name the same group or they read different
+    # containers and the widget silently stays empty.
+    ORBIT_APP_GROUP: group.com.orbit.app
+
 # All non-UI code lives in the OrbitKit package at the repository root, so
 # these targets carry only SwiftUI/WidgetKit/AppIntents code and nothing is
 # compiled twice.
@@ -25,9 +33,19 @@ targets:
     platform: macOS
     sources:
       - path: OrbitApp
+      - path: Shared
     dependencies:
       - target: OrbitWidgetExtension
         embed: true
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+      - sdk: AppIntents.framework
+      - package: OrbitKit
+        product: OrbitCore
+      - package: OrbitKit
+        product: OrbitProviders
+      - package: OrbitKit
+        product: OrbitPresentation
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.orbit.app
@@ -42,18 +60,24 @@ targets:
         CFBundleDisplayName: Orbit
         LSMinimumSystemVersion: "14.0"
         NSHumanReadableCopyright: ""
+        ORBIT_APP_GROUP: $(ORBIT_APP_GROUP)
     entitlements:
       path: OrbitApp/OrbitApp.entitlements
       properties:
-        com.apple.security.app-sandbox: true
+        # Deliberately NOT sandboxed. Orbit reads usage by running Claude
+        # Code's own CLI, and App Sandbox forbids executing binaries outside
+        # the container. That rules out the Mac App Store; this is a developer
+        # tool distributed directly. The widget extension stays sandboxed.
+        com.apple.security.app-sandbox: false
         com.apple.security.application-groups:
-          - group.com.orbit.app
+          - $(ORBIT_APP_GROUP)
 
   OrbitWidgetExtension:
     type: app-extension
     platform: macOS
     sources:
       - path: OrbitWidget
+      - path: Shared
     dependencies:
       - sdk: WidgetKit.framework
       - sdk: SwiftUI.framework
@@ -76,6 +100,7 @@ targets:
       path: OrbitWidget/Info.plist
       properties:
         CFBundleDisplayName: OrbitWidget
+        ORBIT_APP_GROUP: $(ORBIT_APP_GROUP)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:
@@ -83,7 +108,7 @@ targets:
       properties:
         com.apple.security.app-sandbox: true
         com.apple.security.application-groups:
-          - group.com.orbit.app
+          - $(ORBIT_APP_GROUP)
 
 # OrbitKit's own tests run with `swift test` (SPM test products aren't valid
 # Xcode scheme test targets, so they aren't listed here).

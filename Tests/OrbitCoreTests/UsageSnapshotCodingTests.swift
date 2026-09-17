@@ -11,11 +11,21 @@ final class UsageSnapshotCodingTests: XCTestCase {
         XCTAssertEqual(decoded, original)
     }
 
-    func testDurationsSurviveWithSubSecondPrecision() throws {
+    func testProgressSurvivesWithFullPrecision() throws {
         let original = UsageFixtures.period(used: 1.5, limit: 2.25)
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(UsagePeriod.self, from: data)
-        XCTAssertEqual(decoded.used.secondsDouble, 1.5, accuracy: 1e-9)
-        XCTAssertEqual(decoded.limit.secondsDouble, 2.25, accuracy: 1e-9)
+        XCTAssertEqual(decoded.progress, 1.5 / 2.25, accuracy: 1e-9)
+    }
+
+    /// Decoding routes through the clamping initializer, so a corrupted or
+    /// hand-edited cache cannot reintroduce an out-of-range fraction.
+    func testDecodingClampsAnOutOfRangeFraction() throws {
+        let json = """
+        {"id":"session","type":"session","progress":4.2,"resetDate":0}
+        """.data(using: .utf8)!
+
+        let decoded = try JSONDecoder().decode(UsagePeriod.self, from: json)
+        XCTAssertEqual(decoded.progress, 1, accuracy: 1e-9)
     }
 }
