@@ -20,7 +20,7 @@ settings:
     # "$(DEVELOPMENT_TEAM).group.com.orbit.app" and keep both targets on it.
     # The app and the widget must name the same group or they read different
     # containers and the widget silently stays empty.
-    ORBIT_APP_GROUP: group.com.orbit.app
+    ORBIT_APP_GROUP: $(DEVELOPMENT_TEAM).group.com.orbit.app
 
 # All non-UI code lives in the OrbitKit package at the repository root, so
 # these targets carry only SwiftUI/WidgetKit/AppIntents code and nothing is
