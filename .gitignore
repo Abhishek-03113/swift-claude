@@ -1,4 +1,9 @@
 .DS_Store
+._*
+.AppleDouble
+.LSOverride
+.Spotlight-V100
+.Trashes
 
 # Swift package
 .build/
@@ -11,3 +16,6 @@ DerivedData/
 *.xcodeproj
 *.xcworkspace
 xcuserdata/
+
+# Local signing config (see App/.env.example)
+App/.env

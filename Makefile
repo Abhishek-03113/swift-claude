@@ -23,7 +23,7 @@ test: ## Run the OrbitKit test suites
 
 .PHONY: generate
 generate: ## Generate the Xcode project from App/project.yml (requires xcodegen)
-	cd App && xcodegen generate
+	cd App && [ -f .env ] && set -a && . ./.env && set +a; xcodegen generate
 
 .PHONY: open
 open: generate ## Generate and open the Xcode project

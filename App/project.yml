@@ -1,6 +1,6 @@
 name: Orbit
 options:
-  bundleIdPrefix: com.orbit.app
+  bundleIdPrefix: com.abhishek00edu.orbit
   deploymentTarget:
     macOS: "14.0"
   createIntermediateGroups: true
@@ -10,7 +10,9 @@ settings:
     SWIFT_VERSION: "5.0" # language mode, not toolchain version
     MARKETING_VERSION: "1.0"
     CURRENT_PROJECT_VERSION: "1"
-    DEVELOPMENT_TEAM: "" # TODO: set your Apple Developer Team ID
+    DEVELOPMENT_TEAM: ${ORBIT_TEAM_ID}
+    CODE_SIGN_STYLE: Automatic
+    CODE_SIGN_IDENTITY: "Apple Development"
 
     # The App Group both targets share. macOS requires a team-ID prefix for a
     # NON-SANDBOXED app, and the app has to be non-sandboxed to run the
@@ -48,7 +50,7 @@ targets:
         product: OrbitPresentation
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.orbit.app
+        PRODUCT_BUNDLE_IDENTIFIER: com.abhishek00edu.orbit
         PRODUCT_NAME: Orbit
         INFOPLIST_FILE: OrbitApp/Info.plist
         CODE_SIGN_ENTITLEMENTS: OrbitApp/OrbitApp.entitlements
@@ -90,7 +92,7 @@ targets:
         product: OrbitPresentation
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.orbit.app.OrbitWidget
+        PRODUCT_BUNDLE_IDENTIFIER: com.abhishek00edu.orbit.OrbitWidget
         PRODUCT_NAME: OrbitWidget
         INFOPLIST_FILE: OrbitWidget/Info.plist
         CODE_SIGN_ENTITLEMENTS: OrbitWidget/OrbitWidget.entitlements

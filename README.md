@@ -56,8 +56,10 @@ make open
 
 Then:
 
-1. Set your Apple Developer **Team** on both targets, or set
-   `DEVELOPMENT_TEAM` in `App/project.yml` and re-run `make generate`.
+1. Copy `App/.env.example` to `App/.env` and set `ORBIT_TEAM_ID` to your
+   Apple Developer Team ID (Membership tab at developer.apple.com/account).
+   `make generate`/`make open`/`make app` source it automatically. `App/.env`
+   is gitignored — it's the only file that should hold this.
 2. **Set `ORBIT_APP_GROUP`** in `App/project.yml` to
    `$(DEVELOPMENT_TEAM).group.com.orbit.app`. macOS requires the team-ID
    prefix for a non-sandboxed app (see below), and the app and widget must
