@@ -116,7 +116,7 @@ struct UsageDialContainer: View {
     private func glassCore(diameter: CGFloat) -> some View {
         let coreDiameter = diameter * DialMetrics.coreDiameterFraction
 
-        return GlassSurface {
+        return GlassSurface(diameter: coreDiameter) {
             UsageCenterContent(
                 presentation: presentation,
                 diameter: coreDiameter,
