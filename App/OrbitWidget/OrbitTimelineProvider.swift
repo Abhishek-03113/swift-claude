@@ -29,13 +29,7 @@ extension OrbitTimelineEntry {
 /// running its CLI, and a widget extension is sandboxed and has no business
 /// spawning processes — so the app refreshes and writes to the App Group, and
 /// this reads it back.
-///
-/// Conforms to `AppIntentTimelineProvider` rather than plain
-/// `TimelineProvider`: WidgetKit hands each placed widget instance its own
-/// persisted `SelectUsagePeriodIntent` here, which is what lets three
-/// instances of this widget each show a different focused period instead of
-/// all reading one shared value.
-struct OrbitTimelineProvider: AppIntentTimelineProvider {
+struct OrbitTimelineProvider: TimelineProvider {
     /// Session windows are short (5h), so re-read often enough to stay
     /// believable while staying well inside WidgetKit's refresh budget.
     private static let refreshInterval: TimeInterval = 10 * 60
@@ -46,37 +40,42 @@ struct OrbitTimelineProvider: AppIntentTimelineProvider {
 
     private let provider: AgentProvider
     private let repository: UsageRepository
+    private let selectionStore: SelectedPeriodStore
 
     init(
         provider: AgentProvider = .claudeCode,
-        repository: UsageRepository = CachedSnapshotRepository()
+        repository: UsageRepository = CachedSnapshotRepository(),
+        selectionStore: SelectedPeriodStore = .shared
     ) {
         self.provider = provider
         self.repository = repository
+        self.selectionStore = selectionStore
     }
 
     func placeholder(in context: Context) -> OrbitTimelineEntry {
         .preview()
     }
 
-    func snapshot(for configuration: SelectUsagePeriodIntent, in context: Context) async -> OrbitTimelineEntry {
+    func getSnapshot(in context: Context, completion: @escaping (OrbitTimelineEntry) -> Void) {
         guard !context.isPreview else {
-            return .preview()
+            return completion(.preview())
         }
-        return await currentEntry(selected: configuration.period.selection)
+        Task { completion(await currentEntry()) }
     }
 
-    func timeline(for configuration: SelectUsagePeriodIntent, in context: Context) async -> Timeline<OrbitTimelineEntry> {
-        let entry = await currentEntry(selected: configuration.period.selection)
-        let nextRefresh = Date.now.addingTimeInterval(Self.refreshInterval)
-        return Timeline(entries: [entry], policy: .after(nextRefresh))
+    func getTimeline(in context: Context, completion: @escaping (Timeline<OrbitTimelineEntry>) -> Void) {
+        Task {
+            let entry = await currentEntry()
+            let nextRefresh = Date.now.addingTimeInterval(Self.refreshInterval)
+            completion(Timeline(entries: [entry], policy: .after(nextRefresh)))
+        }
     }
 
-    private func currentEntry(selected: SelectedUsagePeriod) async -> OrbitTimelineEntry {
+    private func currentEntry() async -> OrbitTimelineEntry {
         OrbitTimelineEntry(
             date: .now,
             loadState: await loadState(),
-            selected: selected,
+            selected: selectionStore.load(),
             provider: provider
         )
     }

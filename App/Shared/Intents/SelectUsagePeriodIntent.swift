@@ -2,22 +2,19 @@ import AppIntents
 import OrbitPresentation
 import WidgetKit
 
-/// Backs the session <-> weekly tap interaction, and doubles as the widget's
-/// own per-instance configuration.
+/// Backs the session <-> weekly tap interaction.
 ///
-/// This is also `OrbitWidget`'s `AppIntentConfiguration` intent: WidgetKit
-/// persists one instance of it per placed widget, so three widgets on the
-/// desktop each remember their own focused period rather than sharing one
-/// value the way a plain App-Group-backed store would. Running this intent —
-/// which a tap on a ring does, by constructing a new instance with the
-/// flipped period — is exactly how a configuration intent updates the
-/// widget instance that invoked it; there's no separate "write configuration"
-/// call to make.
-struct SelectUsagePeriodIntent: WidgetConfigurationIntent {
+/// Widgets rebuild from timeline entries rather than holding live view state,
+/// so the selection has to live somewhere durable: this writes it to the
+/// shared App Group and asks WidgetKit to reload, and `OrbitTimelineProvider`
+/// reads it back when building the next entry. An App Intents button is the
+/// supported interactivity mechanism — widgets cannot host gesture
+/// recognizers.
+struct SelectUsagePeriodIntent: AppIntent {
     static var title: LocalizedStringResource = "Select Usage Period"
     static var description = IntentDescription("Switches the Orbit widget's focused quota between session and weekly.")
 
-    @Parameter(title: "Period", default: .session)
+    @Parameter(title: "Period")
     var period: UsagePeriodAppEnum
 
     init() {
@@ -29,6 +26,9 @@ struct SelectUsagePeriodIntent: WidgetConfigurationIntent {
     }
 
     func perform() async throws -> some IntentResult {
+        SelectedPeriodStore.shared.save(period.selection)
+        WidgetCenter.shared.reloadTimelines(ofKind: OrbitWidgetKind.identifier)
+
         // Any tap on the dial is also treated as "show me current numbers".
         // The widget has no room for a separate refresh control, and asking
         // OrbitAgent to re-read is cheap and idempotent — the daemon is
