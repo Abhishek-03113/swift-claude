@@ -1,11 +1,14 @@
 import Foundation
 import OrbitCore
 
-/// App-Group-backed store for the focused period, shared between the intent
-/// that writes it and the timeline provider that reads it back.
+/// App-Group-backed store for the app window's own focused period.
 ///
-/// Widgets rebuild from timeline entries rather than holding live state, so
-/// the selection has to survive outside the view hierarchy.
+/// The widget does not use this: each placed widget instance keeps its own
+/// focused period in its `SelectUsagePeriodIntent` configuration, which
+/// WidgetKit persists per instance. The app has exactly one window, so a
+/// single App-Group-backed value is the right model here — it just needs to
+/// survive relaunches, the same reason a widget's own state has to survive
+/// outside its view hierarchy.
 public struct SelectedPeriodStore: Sendable {
     public static let shared = SelectedPeriodStore()
 
