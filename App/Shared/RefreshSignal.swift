@@ -1,36 +1,51 @@
 import Foundation
 
-/// Cross-process nudge from the widget to the app: "please re-read usage".
-///
-/// The widget cannot fetch. Reading Claude Code's usage means running its CLI,
-/// and a widget extension is sandboxed. So a tap posts this signal, and the
-/// app — which is not sandboxed and can run the CLI — does the work and
-/// reloads the widget's timeline afterwards.
+/// Cross-process nudges between the widget, the app, and `OrbitAgent`, the
+/// background login item that owns fetching.
 ///
 /// `DistributedNotificationCenter` is the lightest thing that crosses the
-/// process boundary without an XPC service. It is fire-and-forget by design:
-/// if the app is not running there is no observer, the signal is dropped, and
-/// the widget simply keeps showing its last reading. That is the accepted
-/// trade — the alternative is launching the app on every tap.
+/// process boundary without an XPC service.
 enum RefreshSignal {
-    static let name = Notification.Name("com.orbit.app.refresh-usage")
+    private static let requestName = Notification.Name("com.orbit.app.refresh-usage")
+    private static let completedName = Notification.Name("com.orbit.app.usage-refreshed")
 
-    /// Posted by the widget. `deliverImmediately` bypasses the coalescing
-    /// that would otherwise delay a user-initiated tap.
-    static func post() {
+    /// "Please re-read usage." Posted by a tap on the widget's unavailable
+    /// state; observed by `OrbitAgent`, which is always running and does the
+    /// actual fetch. `deliverImmediately` bypasses the coalescing that would
+    /// otherwise delay a user-initiated tap.
+    static func postRefreshRequested() {
         DistributedNotificationCenter.default().postNotificationName(
-            name,
+            requestName,
             object: nil,
             userInfo: nil,
             deliverImmediately: true
         )
     }
 
-    /// Observed by the app. The returned token must be retained; dropping it
-    /// removes the observer.
-    static func observe(_ handler: @escaping @Sendable () -> Void) -> NSObjectProtocol {
+    static func observeRefreshRequested(_ handler: @escaping @Sendable () -> Void) -> NSObjectProtocol {
         DistributedNotificationCenter.default().addObserver(
-            forName: name,
+            forName: requestName,
+            object: nil,
+            queue: .main
+        ) { _ in handler() }
+    }
+
+    /// "Usage just changed in the App Group cache." Posted by `OrbitAgent`
+    /// after every refresh, whether scheduled or requested; observed by the
+    /// app so its window reflects a fetch it did not itself perform, without
+    /// re-fetching.
+    static func postRefreshCompleted() {
+        DistributedNotificationCenter.default().postNotificationName(
+            completedName,
+            object: nil,
+            userInfo: nil,
+            deliverImmediately: true
+        )
+    }
+
+    static func observeRefreshCompleted(_ handler: @escaping @Sendable () -> Void) -> NSObjectProtocol {
+        DistributedNotificationCenter.default().addObserver(
+            forName: completedName,
             object: nil,
             queue: .main
         ) { _ in handler() }

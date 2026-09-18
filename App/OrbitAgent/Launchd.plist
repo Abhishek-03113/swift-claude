@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.orbit.agent</string>
+	<key>BundleProgram</key>
+	<string>Contents/MacOS/OrbitAgent</string>
+	<!-- No RunAtLoad/KeepAlive here: SMAppService starts the job itself once
+	     registered, and keeps it running as a login item. The daemon's own
+	     run loop is what keeps the process alive between refreshes; nothing
+	     here needs to restart it on a schedule. -->
+	<key>ProcessType</key>
+	<string>Background</string>
+</dict>
+</plist>

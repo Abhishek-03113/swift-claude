@@ -1,6 +1,6 @@
 import Foundation
 
-/// Runs a refresh roughly every ten minutes while the app is running.
+/// Runs a refresh roughly every ten minutes while its host process is alive.
 ///
 /// `NSBackgroundActivityScheduler` rather than a `Timer`: it is the macOS
 /// mechanism for periodic maintenance work, so the system can slide the
@@ -8,8 +8,8 @@ import Foundation
 /// under load. Usage that is a few minutes stale is fine; waking the machine
 /// on a strict ten-minute drumbeat is not.
 ///
-/// This deliberately stops when the app does. Refreshing with the app closed
-/// would need a LaunchAgent and a separate helper executable.
+/// Hosted by `OrbitAgent`, the background login item, so periodic refresh
+/// keeps running whether or not the main app or a widget is on screen.
 @MainActor
 final class PeriodicRefreshScheduler {
     static let interval: TimeInterval = 10 * 60

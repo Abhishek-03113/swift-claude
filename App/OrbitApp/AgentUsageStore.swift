@@ -3,15 +3,15 @@ import Observation
 import OrbitCore
 import OrbitPresentation
 import SwiftUI
-import WidgetKit
 
 /// Holds the app's usage state: one load state per connected agent, the
 /// focused period, and whether a refresh is in flight.
 ///
-/// The app is the only place that can actually fetch — a widget extension is
-/// sandboxed and cannot run a provider's CLI — so this is also what keeps the
-/// widget's cache current, on three triggers: launch, the ten-minute
-/// scheduler, and a tap on the widget relayed through `RefreshSignal`.
+/// `OrbitAgent`, the background login item, is what keeps the widget's cache
+/// current on a schedule and on a tap — this store's own refresh is purely
+/// for the window's benefit: an immediate read on launch so the app is never
+/// looking at data staler than what's already cached, and per-agent state to
+/// show while that read is in flight.
 @MainActor
 @Observable
 final class AgentUsageStore {
@@ -33,19 +33,16 @@ final class AgentUsageStore {
     let agents: [AgentSlot]
 
     private let selectionStore: SelectedPeriodStore
-    private let scheduler: PeriodicRefreshScheduler
     // Read and cleared only from deinit's nonisolated context, so it can't be
     // `@MainActor`-isolated like the rest of this class's storage.
     private nonisolated(unsafe) var refreshObserver: NSObjectProtocol?
 
     init(
         agents: [AgentSlot] = AgentCatalog.live(),
-        selectionStore: SelectedPeriodStore = .shared,
-        scheduler: PeriodicRefreshScheduler? = nil
+        selectionStore: SelectedPeriodStore = .shared
     ) {
         self.agents = agents
         self.selectionStore = selectionStore
-        self.scheduler = scheduler ?? PeriodicRefreshScheduler()
         self.selectedPeriod = selectionStore.load()
         self.states = agents.reduce(into: [:]) { states, agent in
             states[agent.id] = agent.isConnected ? .loading : .failed(.unavailable)
@@ -62,49 +59,29 @@ final class AgentUsageStore {
         states[agent.id] ?? .loading
     }
 
-    /// Called once when the window appears: fetch now, then keep fetching on
-    /// the scheduler and whenever the widget asks.
+    /// Called once when the window appears: read now, then stay live by
+    /// reacting to whatever `OrbitAgent` refreshes in the background.
     func start() async {
         if refreshObserver == nil {
-            refreshObserver = RefreshSignal.observe { [weak self] in
+            refreshObserver = RefreshSignal.observeRefreshCompleted { [weak self] in
                 Task { @MainActor in await self?.refreshAll() }
             }
-        }
-
-        scheduler.start { [weak self] in
-            await self?.refreshAll()
         }
 
         await refreshAll()
     }
 
+    /// Re-fetches every agent. Also what a manual refresh in the window
+    /// calls, so a user-initiated tap in the app itself doesn't wait on the
+    /// daemon's own schedule.
     func refreshAll() async {
         guard !isRefreshing else { return }
         isRefreshing = true
         defer { isRefreshing = false }
 
-        for agent in agents {
-            guard let repository = agent.repository else { continue }
-            states[agent.id] = await load(from: repository)
-        }
+        states = await UsageRefreshCoordinator.refreshAll(agents: agents)
 
         lastRefreshed = .now
         refreshToken += 1
-        // The cache the app just wrote is what the widget reads.
-        WidgetCenter.shared.reloadAllTimelines()
-    }
-
-    private func load(from repository: UsageRepository) async -> UsageLoadState {
-        // A caching repository already expresses the fetch-then-fall-back
-        // policy; anything else gets the same treatment applied here.
-        if let caching = repository as? CachingUsageRepository {
-            return await caching.loadState()
-        }
-
-        do {
-            return .loaded(try await repository.snapshot())
-        } catch {
-            return .failed(error as? UsageRepositoryError ?? .unavailable)
-        }
     }
 }

@@ -31,9 +31,10 @@ struct SelectUsagePeriodIntent: AppIntent {
 
         // Any tap on the dial is also treated as "show me current numbers".
         // The widget has no room for a separate refresh control, and asking
-        // the app to re-read is cheap and idempotent — if the app isn't
-        // running, nothing happens and the cached reading stays on screen.
-        RefreshSignal.post()
+        // OrbitAgent to re-read is cheap and idempotent — the daemon is
+        // always running, so this reliably lands rather than depending on
+        // the main app happening to be open.
+        RefreshSignal.postRefreshRequested()
         return .result()
     }
 }

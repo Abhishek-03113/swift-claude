@@ -39,9 +39,17 @@ targets:
     dependencies:
       - target: OrbitWidgetExtension
         embed: true
+      # Not `embed: true` — XcodeGen's embed phases target known product
+      # kinds (extensions, frameworks, XPC services), not a bare command-line
+      # tool. `link: false` still orders OrbitAgent's build before OrbitApp's
+      # postbuild script below, which does the actual copy into
+      # Contents/MacOS.
+      - target: OrbitAgent
+        link: false
       - sdk: WidgetKit.framework
       - sdk: SwiftUI.framework
       - sdk: AppIntents.framework
+      - sdk: ServiceManagement.framework
       - package: OrbitKit
         product: OrbitCore
       - package: OrbitKit
@@ -70,6 +78,76 @@ targets:
         # Code's own CLI, and App Sandbox forbids executing binaries outside
         # the container. That rules out the Mac App Store; this is a developer
         # tool distributed directly. The widget extension stays sandboxed.
+        com.apple.security.app-sandbox: false
+        com.apple.security.application-groups:
+          - $(ORBIT_APP_GROUP)
+    # OrbitAgent has no bundle of its own to embed — it is a bare executable,
+    # not an extension or framework — so it is placed by hand rather than
+    # through XcodeGen's `embed` dependency mechanism, which only knows about
+    # those bundled product kinds. This copies OrbitAgent's already-built
+    # binary into Contents/MacOS alongside Orbit itself, and stages the
+    # launchd plist that names it, at the path SMAppService.agent(plistName:)
+    # reads: Contents/Library/LaunchAgents.
+    postbuildScripts:
+      - name: Stage OrbitAgent
+        script: |
+          set -e
+          APP_CONTENTS="${BUILT_PRODUCTS_DIR}/${CONTENTS_FOLDER_PATH}"
+          ditto "${BUILT_PRODUCTS_DIR}/OrbitAgent" "${APP_CONTENTS}/MacOS/OrbitAgent"
+
+          # Re-signed with the host app's own identity: SMAppService requires
+          # the registered helper to share the app's team, and Xcode's final
+          # whole-bundle signing pass does not reach into a file a script
+          # copied in after the app target's own Compile Sources ran.
+          if [ "${CODE_SIGNING_ALLOWED}" != "NO" ]; then
+            codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY:-$CODE_SIGN_IDENTITY}" \
+              --entitlements "${SRCROOT}/OrbitAgent/OrbitAgent.entitlements" \
+              "${APP_CONTENTS}/MacOS/OrbitAgent"
+          fi
+
+          mkdir -p "${APP_CONTENTS}/Library/LaunchAgents"
+          cp "${SRCROOT}/OrbitAgent/Launchd.plist" \
+             "${APP_CONTENTS}/Library/LaunchAgents/com.orbit.agent.plist"
+        basedOnDependencyAnalysis: false
+
+  OrbitAgent:
+    type: tool
+    platform: macOS
+    sources:
+      - path: OrbitAgent
+        excludes:
+          - Info.plist
+          - OrbitAgent.entitlements
+          - Launchd.plist
+      - path: Shared
+    dependencies:
+      - sdk: WidgetKit.framework
+      - package: OrbitKit
+        product: OrbitCore
+      - package: OrbitKit
+        product: OrbitProviders
+      - package: OrbitKit
+        product: OrbitPresentation
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.abhishek00edu.orbit.OrbitAgent
+        PRODUCT_NAME: OrbitAgent
+        INFOPLIST_FILE: OrbitAgent/Info.plist
+        CODE_SIGN_ENTITLEMENTS: OrbitAgent/OrbitAgent.entitlements
+        ENABLE_HARDENED_RUNTIME: true
+        SKIP_INSTALL: true
+    info:
+      path: OrbitAgent/Info.plist
+      properties:
+        CFBundleDisplayName: OrbitAgent
+        LSMinimumSystemVersion: "14.0"
+        LSUIElement: true
+        LSBackgroundOnly: true
+        NSHumanReadableCopyright: ""
+        ORBIT_APP_GROUP: $(ORBIT_APP_GROUP)
+    entitlements:
+      path: OrbitAgent/OrbitAgent.entitlements
+      properties:
         com.apple.security.app-sandbox: false
         com.apple.security.application-groups:
           - $(ORBIT_APP_GROUP)
@@ -120,6 +198,7 @@ schemes:
       targets:
         OrbitApp: all
         OrbitWidgetExtension: all
+        OrbitAgent: all
     run:
       config: Debug
     archive:

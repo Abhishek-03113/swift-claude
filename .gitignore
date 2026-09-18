@@ -16,6 +16,7 @@ DerivedData/
 *.xcodeproj
 *.xcworkspace
 xcuserdata/
+*.app
 
 # Local signing config (see App/.env.example)
 App/.env

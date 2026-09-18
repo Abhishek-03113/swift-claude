@@ -61,6 +61,7 @@ struct OrbitWidgetView: View {
                     HStack {
                         ProviderBadge(provider: presentation.provider, size: 11)
                         Spacer()
+                        RefreshButton()
                     }
                     .padding(.horizontal, 4)
                 }
@@ -114,7 +115,11 @@ private struct DialDetailColumn: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            ProviderBadge(provider: presentation.provider, size: 11)
+            HStack {
+                ProviderBadge(provider: presentation.provider, size: 11)
+                Spacer()
+                RefreshButton()
+            }
 
             Spacer(minLength: 0)
 
@@ -144,6 +149,25 @@ private struct DialDetailColumn: View {
     }
 }
 
+/// A small, explicit refresh control alongside the provider badge, next to
+/// the dial's own tap-anywhere-to-refresh behavior.
+///
+/// That corner-tap works but is not discoverable — nothing on screen says a
+/// tap does anything — so this gives the loaded dial the same visible
+/// affordance the unavailable state already has, reusing `RefreshGlyph` so it
+/// reads as the same control as the app's own toolbar button.
+private struct RefreshButton: View {
+    var body: some View {
+        Button(intent: RefreshUsageIntent()) {
+            RefreshGlyph(size: 10)
+                .padding(6)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Refresh usage")
+    }
+}
+
 /// Keeps the dial's silhouette on screen — dim, static rings rather than a
 /// spinner — while the first read is in flight.
 private struct LoadingDialPlaceholder: View {
@@ -168,9 +192,10 @@ private struct LoadingDialPlaceholder: View {
 /// Preserves provider identity and offers a next step, without destroying the
 /// widget's visual identity with a raw error dump.
 ///
-/// The retry asks the app to re-read rather than fetching here — the widget
-/// reads the app's cache and cannot run a provider's CLI itself. If the app
-/// isn't running the tap does nothing, which is why the copy names Orbit.
+/// The retry asks OrbitAgent to re-read rather than fetching here — the
+/// widget only reads the shared cache and cannot make a network call itself.
+/// OrbitAgent runs as a background login item independent of the main app
+/// window, so the tap works whether or not Orbit itself is open.
 private struct UsageUnavailableView: View {
     @Environment(\.widgetFamily) private var family
 
@@ -201,6 +226,6 @@ private struct UsageUnavailableView: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(provider.name) usage unavailable. Refresh, or open Orbit if it isn't running.")
+        .accessibilityLabel("\(provider.name) usage unavailable. Double tap to refresh.")
     }
 }

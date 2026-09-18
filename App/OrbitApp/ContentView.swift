@@ -45,7 +45,11 @@ struct ContentView: View {
                 Button {
                     Task { await store.refreshAll() }
                 } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
+                    Label {
+                        Text("Refresh")
+                    } icon: {
+                        RefreshGlyph(size: 13, color: .primary)
+                    }
                 }
                 .disabled(store.isRefreshing)
                 .help("Re-read usage from each connected agent")
